@@ -5,7 +5,7 @@ SET(SOURCES riftwm.c)
 
 SET(HEADERS )
 
-SET(LIBS GLEW GL X11 Xcomposite)
+SET(LIBS GLEW GL X11 Xcomposite Xdamage)
 
 ADD_EXECUTABLE(riftwm ${SOURCES} ${HEADERS})
 TARGET_LINK_LIBRARIES(riftwm ${LIBS})
