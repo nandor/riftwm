@@ -20,6 +20,7 @@ typedef struct riftwin_t
   GLuint            texture;
   Pixmap            pixmap;
   GLXPixmap         glx_pixmap;
+  int               glx_bound;
   int               width;
   int               height;
   struct riftwin_t *next;
@@ -49,6 +50,7 @@ typedef struct riftwm_t
 
   volatile int      running;
   riftwin_t        *windows;
+  int               window_count;
 
   renderer_t       *renderer;
   kinect_t         *kinect;
@@ -57,10 +59,7 @@ typedef struct riftwm_t
 
 void riftwm_init(riftwm_t *);
 void riftwm_run(riftwm_t *);
-void riftwm_scan(riftwm_t *);
 void riftwm_destroy(riftwm_t *);
-void riftwm_add_window(riftwm_t *, Window);
-void riftwm_delete_window(riftwm_t *, riftwin_t *);
 void riftwm_error(riftwm_t *, const char *, ...);
 
 #endif
