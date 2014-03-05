@@ -7,7 +7,7 @@
 #include <string.h>
 #include <assert.h>
 #include <signal.h>
-#include <X11/extensions/composite.h>
+#include <X11/extensions/Xcomposite.h>
 #include <GL/glew.h>
 #include <GL/glx.h>
 #include "riftwm.h"
@@ -46,37 +46,59 @@ create_texture(riftwm_t *wm, riftwin_t *win)
   glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-static void
+static riftwin_t *
+find_window(riftwm_t *wm, Window window)
+{
+  riftwin_t *win = wm->windows;
+  while (win) {
+    if (win->window == window) {
+      return win;
+    }
+    win = win->next;
+  }
+
+  return NULL;
+}
+
+static riftwin_t *
 add_window(riftwm_t *wm, Window window)
 {
   riftwin_t *win;
   XWindowAttributes attr;
 
-  // Allocate storage for the structure
-  win = (riftwin_t*)malloc(sizeof(riftwin_t));
-  memset(win, 0, sizeof(riftwin_t));
-  win->window = window;
-  win->next = wm->windows;
-  wm->windows = win;
-  wm->window_count ++;
+  // Check whether the window is already managed by us
+  if (!(win = find_window(wm, window)))
+  {
+    // Allocate storage for the structure
+    win = (riftwin_t*)malloc(sizeof(riftwin_t));
+    memset(win, 0, sizeof(riftwin_t));
+    win->window = window;
+    win->next = wm->windows;
+    wm->windows = win;
+    wm->window_count++;
 
-  // Retrieve properties
-  if (!XGetWindowAttributes(wm->dpy, window, &attr)) {
-    riftwm_error(wm, "Cannot retrieve window attributes");
+    // Retrieve properties
+    if (!XGetWindowAttributes(wm->dpy, window, &attr)) {
+      riftwm_error(wm, "Cannot retrieve window attributes");
+    }
+
+    win->width = attr.width;
+    win->height = attr.height;
   }
 
   // Check the state of the window
-  win->width = attr.width;
-  win->height = attr.height;
   switch (attr.map_state) {
     case IsUnmapped:
-      break;
     case IsUnviewable:
       break;
+
+    // The pixmap is only accessible if the window is visible
     case IsViewable:
       create_texture(wm, win);
       break;
   }
+
+  return win;
 }
 
 static void
@@ -95,20 +117,6 @@ free_window(riftwm_t *wm, riftwin_t *win)
   free(win);
 }
 
-static riftwin_t *
-find_window(riftwm_t *wm, Window window)
-{
-  riftwin_t *win = wm->windows;
-  while (win) {
-    if (win->window == window) {
-      return win;
-    }
-    win = win->next;
-  }
-
-  return NULL;
-}
-
 static void
 destroy_window(riftwm_t *wm, Window window)
 {
@@ -123,6 +131,8 @@ destroy_window(riftwm_t *wm, Window window)
       } else {
         wm->windows = win;
       }
+
+      wm->window_count--;
       free_window(wm, tmp);
     } else {
       last = win;
@@ -137,10 +147,10 @@ render_window(riftwm_t *wm, riftwin_t *win)
   glBindTexture(GL_TEXTURE_2D, win->texture);
 
   glBegin(GL_QUADS);
-    glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.8f, -0.8f, 0.0f);
-    glTexCoord2f(1.0f, 0.0f); glVertex3f( 0.8f, -0.8f, 0.0f);
-    glTexCoord2f(1.0f, 1.0f); glVertex3f( 0.8f,  0.8f, 0.0f);
-    glTexCoord2f(0.0f, 1.0f); glVertex3f(-0.8f,  0.8f, 0.0f);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-0.8f, -0.8f, 0.0f);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f( 0.8f, -0.8f, 0.0f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f( 0.8f,  0.8f, 0.0f);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.8f,  0.8f, 0.0f);
   glEnd();
 
   glBindTexture(GL_TEXTURE_2D, 0);
@@ -189,34 +199,28 @@ scan_windows(riftwm_t *wm)
 // X Event handlers
 // -----------------------------------------------------------------------------
 static void
-evt_create_notify(riftwm_t *wm, XEvent *evt)
-{
-  add_window(wm, evt->xcreatewindow.window);
-}
-
-static void
 evt_destroy_notify(riftwm_t *wm, XEvent *evt)
 {
   destroy_window(wm, evt->xdestroywindow.window);
 }
 
 static void
+evt_unmap_notify(riftwm_t *wm, XEvent *evt)
+{
+  destroy_window(wm, evt->xunmap.window);
+}
+
+static void
 evt_configure_request(riftwm_t *wm, XEvent *evt)
 {
-  riftwin_t *win;
   XConfigureRequestEvent *cfg = &evt->xconfigurerequest;
 
-  if (!(win = find_window(wm, cfg->window))) {
-    riftwm_error(wm, "Cannot find findow");
-  }
-
-
+  // Send a message to the window giving it a default size
   XConfigureEvent ce;
-
   ce.type = ConfigureNotify;
   ce.display = wm->dpy;
-  ce.event = win->window;
-  ce.window = win->window;
+  ce.event = cfg->window;
+  ce.window = cfg->window;
   ce.x = 0;
   ce.y = 0;
   ce.width = 500;
@@ -224,8 +228,7 @@ evt_configure_request(riftwm_t *wm, XEvent *evt)
   ce.border_width = 0;
   ce.above = None;
   ce.override_redirect = False;
-
-  XSendEvent(wm->dpy, win->window, False, StructureNotifyMask, (XEvent*)&ce);
+  XSendEvent(wm->dpy, cfg->window, False, StructureNotifyMask, (XEvent*)&ce);
 }
 
 static void
@@ -234,8 +237,8 @@ evt_map_request(riftwm_t *wm, XEvent *evt)
   riftwin_t *win;
   XMapRequestEvent *map = &evt->xmaprequest;
 
-  if (!(win = find_window(wm, map->window))) {
-    riftwm_error(wm, "Cannot map window");
+  if (!(win = add_window(wm, map->window))) {
+    riftwm_error(wm, "Cannot manage window");
   }
 
   XMoveResizeWindow(wm->dpy, win->window, 0, 0, 500, 500);
@@ -264,9 +267,9 @@ handlers[LASTEvent] =
   [GraphicsExpose]   = { "GraphicsExpose",    NULL },
   [NoExpose]         = { "NoExpose",          NULL },
   [VisibilityNotify] = { "VisibilityNotify",  NULL },
-  [CreateNotify]     = { "CreateNotify",      evt_create_notify     },
+  [CreateNotify]     = { "CreateNotify",      NULL },
   [DestroyNotify]    = { "DestroyNotify",     evt_destroy_notify    },
-  [UnmapNotify]      = { "UnmapNotify",       NULL },
+  [UnmapNotify]      = { "UnmapNotify",       evt_unmap_notify      },
   [MapNotify]        = { "MapNotify",         NULL },
   [MapRequest]       = { "MapRequest",        evt_map_request       },
   [ReparentNotify]   = { "ReparentNotify",    NULL },
@@ -312,16 +315,6 @@ riftwm_init(riftwm_t *wm)
     }
   } else {
     riftwm_error(wm, "XComposite unavailable");
-  }
-
-  // Check if the damage query extension is available
-  if (XDamageQueryExtension(wm->dpy, &event_base, &error_base)) {
-    XDamageQueryVersion(wm->dpy, &major, &minor);
-    if (major < 1 || (major == 0 && minor < 1)) {
-      riftwm_error(wm, "XDamage %d.%d < 1.1", major, minor);
-    }
-  } else {
-    riftwm_error(wm, "XDamage unavailable");
   }
 
   // Select the oculus screen
@@ -418,6 +411,7 @@ riftwm_init(riftwm_t *wm)
 void
 riftwm_run(riftwm_t *wm)
 {
+  XEvent evt;
 
   XGrabPointer(wm->dpy, wm->root, True, PointerMotionMask,
                GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
@@ -428,14 +422,9 @@ riftwm_run(riftwm_t *wm)
   while (wm->running) {
     // Process events
     while (XPending(wm->dpy) > 0) {
-      XEvent evt;
       XNextEvent(wm->dpy, &evt);
-      if (evt.type < LASTEvent) {
-        fprintf(stderr, "%s %d\n", handlers[evt.type].name,
-                                   evt.xany.window);
-        if (handlers[evt.type].func) {
-          handlers[evt.type].func(wm, &evt);
-        }
+      if (evt.type < LASTEvent && handlers[evt.type].func) {
+        handlers[evt.type].func(wm, &evt);
       }
     }
 
