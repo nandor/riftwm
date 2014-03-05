@@ -42,7 +42,7 @@ create_texture(riftwm_t *wm, riftwin_t *win)
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glXBindTexImageEXT(wm->dpy, win->glx_pixmap, GLX_FRONT_LEFT_EXT, NULL);
+  wm->glXBindTexImageEXT(wm->dpy, win->glx_pixmap, GLX_FRONT_LEFT_EXT, NULL);
   glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -142,6 +142,22 @@ destroy_window(riftwm_t *wm, Window window)
 }
 
 static void
+update_window(riftwm_t *wm, riftwin_t *win)
+{
+
+}
+
+static void
+update_windows(riftwm_t *wm)
+{
+  riftwin_t *win = wm->windows;
+  while (win) {
+    update_window(wm, win);
+    win = win->next;
+  }
+}
+
+static void
 render_window(riftwm_t *wm, riftwin_t *win)
 {
   glBindTexture(GL_TEXTURE_2D, win->texture);
@@ -228,6 +244,7 @@ evt_configure_request(riftwm_t *wm, XEvent *evt)
   ce.border_width = 0;
   ce.above = None;
   ce.override_redirect = False;
+
   XSendEvent(wm->dpy, cfg->window, False, StructureNotifyMask, (XEvent*)&ce);
 }
 
@@ -393,6 +410,15 @@ riftwm_init(riftwm_t *wm)
     riftwm_error(wm, "Cannot bind OpenGL context");
   }
 
+  // Link GLX routines
+  if (!(wm->glXBindTexImageEXT = (glXBindTexImageEXTProc)
+          glXGetProcAddress("glXBindTexImageEXT")) ||
+      !(wm->glXReleaseTexImageEXT = (glXReleaseTexImageEXTProc)
+          glXGetProcAddress("glXReleaseTexImageEXT")))
+  {
+    riftwm_error(wm, "Cannot bind GLX_EXT_texture_from_pixmap");
+  }
+
   // Init GLEW
   if (glewInit() != GLEW_OK) {
     riftwm_error(wm, "Cannot initialise GLEW");
@@ -428,7 +454,11 @@ riftwm_run(riftwm_t *wm)
       }
     }
 
-    // Draw stuff
+    // Update window attributes
+    update_windows(wm);
+    XFlush(wm->dpy);
+
+    // Display the windows
     render_windows(wm);
     glXSwapBuffers(wm->dpy, wm->overlay);
   }

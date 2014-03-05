@@ -7,6 +7,9 @@
 #include <setjmp.h>
 #include <X11/Xlib.h>
 
+// -----------------------------------------------------------------------------
+typedef void (*glXBindTexImageEXTProc) (Display*, GLXDrawable, int, const int*);
+typedef void (*glXReleaseTexImageEXTProc) (Display*, GLXDrawable, int);
 typedef struct renderer_t renderer_t;
 typedef struct kinect_t   kinect_t;
 typedef struct oculus_t   oculus_t;
@@ -20,6 +23,7 @@ typedef struct riftwin_t
   int               glx_bound;
   int               width;
   int               height;
+
   struct riftwin_t *next;
 } riftwin_t;
 
@@ -31,29 +35,32 @@ typedef struct riftfb_t
 
 typedef struct riftwm_t
 {
-  Display          *dpy;
-  int               screen;
-  Window            root;
-  Window            overlay;
-  GLXContext        context;
-  riftfb_t         *fb_config;
-  int               fb_count;
+  Display                   *dpy;
+  int                        screen;
+  Window                     root;
+  Window                     overlay;
+  GLXContext                 context;
+  riftfb_t                  *fb_config;
+  int                        fb_count;
+  glXBindTexImageEXTProc     glXBindTexImageEXT;
+  glXReleaseTexImageEXTProc  glXReleaseTexImageEXT;
 
-  int               screen_width;
-  int               screen_height;
+  int                        screen_width;
+  int                        screen_height;
 
-  jmp_buf           err_jmp;
-  char             *err_msg;
+  jmp_buf                    err_jmp;
+  char                      *err_msg;
 
-  volatile int      running;
-  riftwin_t        *windows;
-  int               window_count;
+  volatile int               running;
+  riftwin_t                 *windows;
+  int                        window_count;
 
-  renderer_t       *renderer;
-  kinect_t         *kinect;
-  oculus_t         *oculus;
+  renderer_t                *renderer;
+  kinect_t                  *kinect;
+  oculus_t                  *oculus;
 } riftwm_t;
 
+// -----------------------------------------------------------------------------
 void riftwm_init(riftwm_t *);
 void riftwm_run(riftwm_t *);
 void riftwm_scan(riftwm_t *);
