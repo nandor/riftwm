@@ -7,6 +7,7 @@
 #include <string.h>
 #include <assert.h>
 #include <signal.h>
+#include <X11/extensions/composite.h>
 #include <GL/glew.h>
 #include <GL/glx.h>
 #include "riftwm.h"

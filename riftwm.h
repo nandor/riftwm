@@ -6,9 +6,6 @@
 
 #include <setjmp.h>
 #include <X11/Xlib.h>
-#include <X11/extensions/Xcomposite.h>
-#include <X11/extensions/Xfixes.h>
-#include <X11/extensions/shape.h>
 
 typedef struct renderer_t renderer_t;
 typedef struct kinect_t   kinect_t;
@@ -59,6 +56,7 @@ typedef struct riftwm_t
 
 void riftwm_init(riftwm_t *);
 void riftwm_run(riftwm_t *);
+void riftwm_scan(riftwm_t *);
 void riftwm_destroy(riftwm_t *);
 void riftwm_error(riftwm_t *, const char *, ...);
 
