@@ -24,6 +24,7 @@ typedef struct riftwin_t
   int               width;
   int               height;
   int               dirty;
+  int               mapped;
 
   struct riftwin_t *next;
 } riftwin_t;
@@ -67,6 +68,7 @@ void riftwm_init(riftwm_t *);
 void riftwm_run(riftwm_t *);
 void riftwm_scan(riftwm_t *);
 void riftwm_destroy(riftwm_t *);
+void riftwm_restart(riftwm_t *);
 void riftwm_error(riftwm_t *, const char *, ...);
 
 #endif

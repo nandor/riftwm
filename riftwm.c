@@ -62,7 +62,6 @@ create_texture(riftwm_t *wm, riftwin_t *win)
 
   // Retrieve the pixmap from the XComposite
   win->pixmap = XCompositeNameWindowPixmap(wm->dpy, win->window);
-  fprintf(stderr, "%d\n", win->pixmap);
 
   // Create a backing OpenGL pixmap
   const int ATTR[] =
@@ -77,7 +76,6 @@ create_texture(riftwm_t *wm, riftwin_t *win)
   {
     riftwm_error(wm, "Cannot create GLX pixmap");
   }
-  printf("%d\n", win->glx_pixmap);
 
   // Create the texture
   glBindTexture(GL_TEXTURE_2D, win->texture);
@@ -87,6 +85,8 @@ create_texture(riftwm_t *wm, riftwin_t *win)
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   wm->glXBindTexImageEXT(wm->dpy, win->glx_pixmap, GLX_FRONT_LEFT_EXT, NULL);
   glBindTexture(GL_TEXTURE_2D, 0);
+
+  win->dirty = 0;
 }
 
 static riftwin_t *
@@ -117,6 +117,7 @@ add_window(riftwm_t *wm, Window window)
     win->window = window;
     win->next = wm->windows;
     win->dirty = 1;
+    win->mapped = 0;
     wm->windows = win;
     wm->window_count++;
   }
@@ -135,14 +136,14 @@ free_window(riftwm_t *wm, riftwin_t *win)
     win->glx_pixmap = 0;
   }
 
-  if (win->texture) {
-    glDeleteTextures(1, &win->texture);
-    win->texture = 0;
-  }
-
   if (win->pixmap) {
     XFreePixmap(wm->dpy, win->pixmap);
     win->pixmap = 0;
+  }
+
+  if (win->texture) {
+    glDeleteTextures(1, &win->texture);
+    win->texture = 0;
   }
 
   free(win);
@@ -175,7 +176,6 @@ destroy_window(riftwm_t *wm, Window window)
 static void
 update_window(riftwm_t *wm, riftwin_t *win)
 {
-
 }
 
 static void
@@ -193,7 +193,6 @@ render_window(riftwm_t *wm, riftwin_t *win)
 {
   if (win->dirty) {
     create_texture(wm, win);
-    win->dirty = 0;
   }
 
   glBindTexture(GL_TEXTURE_2D, win->texture);
@@ -217,7 +216,9 @@ render_windows(riftwm_t *wm)
 
   riftwin_t *win = wm->windows;
   while (win) {
-    render_window(wm, win);
+    if (win->mapped) {
+      render_window(wm, win);
+    }
     win = win->next;
   }
 
@@ -228,20 +229,25 @@ static void
 scan_windows(riftwm_t *wm)
 {
   Window root, parent, *children;
+  XWindowAttributes attr;
   unsigned count, i;
+  riftwin_t * win;
 
   XGrabServer(wm->dpy);
-
   if (XQueryTree(wm->dpy, wm->root, &root, &parent, &children, &count)) {
     for (i = 0; i < count; ++i) {
-      add_window(wm, children[i]);
+      win = add_window(wm, children[i]);
+      if (!XGetWindowAttributes(wm->dpy, win->window, &attr)) {
+        riftwm_error(wm, "Cannot retrieve window attributes");
+      }
+
+      win->mapped = attr.map_state == IsViewable;
     }
 
     if (children) {
       XFree(children);
     }
   }
-
   XUngrabServer(wm->dpy);
 }
 
@@ -259,9 +265,67 @@ evt_key_press(riftwm_t *wm, XEvent *evt)
       wm->running = 0;
       break;
     case XK_F1:
+      riftwm_restart(wm);
+      break;
+    case XK_F2:
       system("subl &");
       break;
   }
+}
+
+static void
+evt_create_notify(riftwm_t *wm, XEvent *evt)
+{
+  riftwin_t *win;
+  win = add_window(wm, evt->xcreatewindow.window);
+  win->dirty = 1;
+}
+
+static void
+evt_configure_request(riftwm_t *wm, XEvent *evt)
+{
+  XConfigureRequestEvent *cfg = &evt->xconfigurerequest;
+  riftwin_t *win;
+
+  win = add_window(wm, cfg->window);
+  win->dirty = 1;
+
+  // Send a message to the window giving it a default size
+  XConfigureEvent ce;
+  ce.type = ConfigureNotify;
+  ce.display = wm->dpy;
+  ce.event = win->window;
+  ce.window = win->window;
+  ce.x = 0;
+  ce.y = 0;
+  ce.width = 500;
+  ce.height = 500;
+  ce.border_width = 0;
+  ce.above = None;
+  ce.override_redirect = False;
+
+  XSendEvent(wm->dpy, win->window, False, StructureNotifyMask, (XEvent*)&ce);
+}
+
+static void
+evt_map_request(riftwm_t *wm, XEvent *evt)
+{
+  riftwin_t *win;
+  win = add_window(wm, evt->xmaprequest.window);
+  win->dirty = 1;
+
+  XMoveResizeWindow(wm->dpy, win->window, 0, 0, 500, 500);
+  XMapWindow(wm->dpy, win->window);
+  XFlush(wm->dpy);
+}
+
+static void
+evt_map_notify(riftwm_t *wm, XEvent *evt)
+{
+  riftwin_t *win;
+  win = add_window(wm, evt->xmap.window);
+  win->mapped = 1;
+  win->dirty = 1;
 }
 
 static void
@@ -277,57 +341,11 @@ evt_unmap_notify(riftwm_t *wm, XEvent *evt)
 }
 
 static void
-evt_configure_request(riftwm_t *wm, XEvent *evt)
-{
-  XConfigureRequestEvent *cfg = &evt->xconfigurerequest;
-  riftwin_t *win;
-
-  // If the window is already being managed, invalidate its texture
-  if ((win = find_window(wm, cfg->window))) {
-    win->dirty = 1;
-  }
-
-  // Send a message to the window giving it a default size
-  XConfigureEvent ce;
-  ce.type = ConfigureNotify;
-  ce.display = wm->dpy;
-  ce.event = cfg->window;
-  ce.window = cfg->window;
-  ce.x = 0;
-  ce.y = 0;
-  ce.width = 500;
-  ce.height = 500;
-  ce.border_width = 0;
-  ce.above = None;
-  ce.override_redirect = False;
-
-  XSendEvent(wm->dpy, cfg->window, False, StructureNotifyMask, (XEvent*)&ce);
-}
-
-static void
-evt_map_request(riftwm_t *wm, XEvent *evt)
+evt_configure_notify(riftwm_t *wm, XEvent *evt)
 {
   riftwin_t *win;
-  XMapRequestEvent *map = &evt->xmaprequest;
-
-  if (!(win = add_window(wm, map->window))) {
-    riftwm_error(wm, "Cannot manage window");
-  }
-
-  XMoveResizeWindow(wm->dpy, win->window, 0, 0, 500, 500);
-  XMapWindow(wm->dpy, win->window);
-  XFlush(wm->dpy);
-}
-
-static int
-evt_error(Display *dpy, XErrorEvent *evt)
-{
-  char message[1024];
-
-  XGetErrorText(dpy, evt->error_code, message, sizeof(message));
-  riftwm_error(&wm, "X Error: %s", message);
-
-  return 0;
+  win = add_window(wm, evt->xconfigure.window);
+  win->dirty = 1;
 }
 
 struct
@@ -351,13 +369,13 @@ handlers[LASTEvent] =
   [GraphicsExpose]   = { "GraphicsExpose",    NULL },
   [NoExpose]         = { "NoExpose",          NULL },
   [VisibilityNotify] = { "VisibilityNotify",  NULL },
-  [CreateNotify]     = { "CreateNotify",      NULL },
+  [CreateNotify]     = { "CreateNotify",      evt_create_notify     },
   [DestroyNotify]    = { "DestroyNotify",     evt_destroy_notify    },
   [UnmapNotify]      = { "UnmapNotify",       evt_unmap_notify      },
-  [MapNotify]        = { "MapNotify",         NULL },
+  [MapNotify]        = { "MapNotify",         evt_map_notify        },
   [MapRequest]       = { "MapRequest",        evt_map_request       },
   [ReparentNotify]   = { "ReparentNotify",    NULL },
-  [ConfigureNotify]  = { "ConfigureNotify",   NULL },
+  [ConfigureNotify]  = { "ConfigureNotify",   evt_configure_notify  },
   [ConfigureRequest] = { "ConfigureRequest",  evt_configure_request },
   [GravityNotify]    = { "GravityNotify",     NULL },
   [ResizeRequest]    = { "ResizeRequest",     NULL },
@@ -386,9 +404,6 @@ riftwm_init(riftwm_t *wm)
   if (!(wm->dpy = XOpenDisplay(NULL))) {
     riftwm_error(wm, "Cannot open display");
   }
-
-  XSetErrorHandler(evt_error);
-  XSync(wm->dpy, False);
 
   if (!(wm->screen = XScreenCount(wm->dpy))) {
     riftwm_error(wm, "Cannot get screen count");
@@ -494,8 +509,7 @@ riftwm_init(riftwm_t *wm)
     riftwm_error(wm, "Cannot initialise GLEW");
   }
 
-  // Composite all window
-  XCompositeRedirectSubwindows(wm->dpy, wm->root, CompositeRedirectManual);
+  XCompositeRedirectSubwindows(wm->dpy, wm->root, CompositeRedirectAutomatic);
 
   // Capture events
   XSelectInput(wm->dpy, wm->root, SubstructureRedirectMask |
@@ -504,6 +518,38 @@ riftwm_init(riftwm_t *wm)
                                   KeyReleaseMask);
 
   XSync(wm->dpy, False);
+}
+
+void
+riftwm_restart(riftwm_t * wm)
+{
+  struct stat st;
+  int length, read;
+  char *path;
+
+  if (lstat("/proc/self/exe", &st) == -1) {
+    riftwm_error(wm, "Cannot stat /proc/self/exe");
+  }
+
+  length = read = 0;
+  while (read >= length) {
+    length += 128;
+    path = (char*)malloc(sizeof(char) * length);
+    if ((read = readlink("/proc/self/exe", path, length)) < 0) {
+      riftwm_error(wm, "Cannot readlink /proc/self/exe");
+    }
+
+    if (read >= length) {
+      free(path);
+    }
+  }
+
+  path[read] = '\0';
+
+  fprintf(stderr, "Restarting ...\n");
+  if (execv(path, NULL) < 0) {
+    riftwm_error(wm, "Restart failed");
+  }
 }
 
 void
