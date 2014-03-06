@@ -7,10 +7,20 @@
 #include <string.h>
 #include <assert.h>
 #include <signal.h>
+#include <unistd.h>
+#include <getopt.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <X11/extensions/Xcomposite.h>
 #include <GL/glew.h>
 #include <GL/glx.h>
 #include "riftwm.h"
+
+// -----------------------------------------------------------------------------
+// Unique instance referenced by signal handlers
+// -----------------------------------------------------------------------------
+static riftwm_t wm;
 
 // -----------------------------------------------------------------------------
 // Internal stuff
@@ -18,8 +28,41 @@
 static void
 create_texture(riftwm_t *wm, riftwin_t *win)
 {
+  XWindowAttributes attr;
+
+  // Retrieve properties
+  if (!XGetWindowAttributes(wm->dpy, win->window, &attr)) {
+    riftwm_error(wm, "Cannot retrieve window attributes");
+  }
+
+  win->width = attr.width;
+  win->height = attr.height;
+  if (attr.map_state != IsViewable) {
+    return;
+  }
+
+  // Free old resources
+  if (win->glx_pixmap) {
+    glBindTexture(GL_TEXTURE_2D, win->texture);
+    wm->glXReleaseTexImageEXT(wm->dpy, win->glx_pixmap, GLX_FRONT_LEFT_EXT);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glXDestroyPixmap(wm->dpy, win->glx_pixmap);
+    win->glx_pixmap = 0;
+  }
+
+  if (win->pixmap) {
+    XFreePixmap(wm->dpy, win->pixmap);
+    win->pixmap = 0;
+  }
+
+  if (!win->texture) {
+    glGenTextures(1, &win->texture);
+  }
+
   // Retrieve the pixmap from the XComposite
   win->pixmap = XCompositeNameWindowPixmap(wm->dpy, win->window);
+  fprintf(stderr, "%d\n", win->pixmap);
 
   // Create a backing OpenGL pixmap
   const int ATTR[] =
@@ -34,9 +77,9 @@ create_texture(riftwm_t *wm, riftwin_t *win)
   {
     riftwm_error(wm, "Cannot create GLX pixmap");
   }
+  printf("%d\n", win->glx_pixmap);
 
   // Create the texture
-  glGenTextures(1, &win->texture);
   glBindTexture(GL_TEXTURE_2D, win->texture);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -64,7 +107,6 @@ static riftwin_t *
 add_window(riftwm_t *wm, Window window)
 {
   riftwin_t *win;
-  XWindowAttributes attr;
 
   // Check whether the window is already managed by us
   if (!(win = find_window(wm, window)))
@@ -74,28 +116,9 @@ add_window(riftwm_t *wm, Window window)
     memset(win, 0, sizeof(riftwin_t));
     win->window = window;
     win->next = wm->windows;
+    win->dirty = 1;
     wm->windows = win;
     wm->window_count++;
-
-    // Retrieve properties
-    if (!XGetWindowAttributes(wm->dpy, window, &attr)) {
-      riftwm_error(wm, "Cannot retrieve window attributes");
-    }
-
-    win->width = attr.width;
-    win->height = attr.height;
-  }
-
-  // Check the state of the window
-  switch (attr.map_state) {
-    case IsUnmapped:
-    case IsUnviewable:
-      break;
-
-    // The pixmap is only accessible if the window is visible
-    case IsViewable:
-      create_texture(wm, win);
-      break;
   }
 
   return win;
@@ -104,14 +127,22 @@ add_window(riftwm_t *wm, Window window)
 static void
 free_window(riftwm_t *wm, riftwin_t *win)
 {
+  if (win->glx_pixmap) {
+    glBindTexture(GL_TEXTURE_2D, win->texture);
+    wm->glXReleaseTexImageEXT(wm->dpy, win->glx_pixmap, GLX_FRONT_LEFT_EXT);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glXDestroyPixmap(wm->dpy, win->glx_pixmap);
+    win->glx_pixmap = 0;
+  }
+
   if (win->texture) {
     glDeleteTextures(1, &win->texture);
     win->texture = 0;
   }
 
-  if (win->glx_pixmap) {
-    glXDestroyPixmap(wm->dpy, win->glx_pixmap);
-    win->glx_pixmap = 0;
+  if (win->pixmap) {
+    XFreePixmap(wm->dpy, win->pixmap);
+    win->pixmap = 0;
   }
 
   free(win);
@@ -160,22 +191,25 @@ update_windows(riftwm_t *wm)
 static void
 render_window(riftwm_t *wm, riftwin_t *win)
 {
-  glBindTexture(GL_TEXTURE_2D, win->texture);
+  if (win->dirty) {
+    create_texture(wm, win);
+    win->dirty = 0;
+  }
 
+  glBindTexture(GL_TEXTURE_2D, win->texture);
   glBegin(GL_QUADS);
     glTexCoord2f(0.0f, 1.0f); glVertex3f(-0.8f, -0.8f, 0.0f);
     glTexCoord2f(1.0f, 1.0f); glVertex3f( 0.8f, -0.8f, 0.0f);
     glTexCoord2f(1.0f, 0.0f); glVertex3f( 0.8f,  0.8f, 0.0f);
     glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.8f,  0.8f, 0.0f);
   glEnd();
-
   glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 static void
 render_windows(riftwm_t *wm)
 {
-  glClearColor(0.0f, 1.0f, 0.0f, 0.5f);
+  glClearColor(1.0f, 1.0f, 0.0f, 0.5f);
   glViewport(0, 0, wm->screen_width, wm->screen_height);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -215,6 +249,22 @@ scan_windows(riftwm_t *wm)
 // X Event handlers
 // -----------------------------------------------------------------------------
 static void
+evt_key_press(riftwm_t *wm, XEvent *evt)
+{
+  KeySym keysym;
+
+  keysym = XLookupKeysym(&evt->xkey, 0);
+  switch (keysym) {
+    case XK_Escape:
+      wm->running = 0;
+      break;
+    case XK_F1:
+      system("subl &");
+      break;
+  }
+}
+
+static void
 evt_destroy_notify(riftwm_t *wm, XEvent *evt)
 {
   destroy_window(wm, evt->xdestroywindow.window);
@@ -230,6 +280,12 @@ static void
 evt_configure_request(riftwm_t *wm, XEvent *evt)
 {
   XConfigureRequestEvent *cfg = &evt->xconfigurerequest;
+  riftwin_t *win;
+
+  // If the window is already being managed, invalidate its texture
+  if ((win = find_window(wm, cfg->window))) {
+    win->dirty = 1;
+  }
 
   // Send a message to the window giving it a default size
   XConfigureEvent ce;
@@ -260,7 +316,18 @@ evt_map_request(riftwm_t *wm, XEvent *evt)
 
   XMoveResizeWindow(wm->dpy, win->window, 0, 0, 500, 500);
   XMapWindow(wm->dpy, win->window);
-  create_texture(wm, win);
+  XFlush(wm->dpy);
+}
+
+static int
+evt_error(Display *dpy, XErrorEvent *evt)
+{
+  char message[1024];
+
+  XGetErrorText(dpy, evt->error_code, message, sizeof(message));
+  riftwm_error(&wm, "X Error: %s", message);
+
+  return 0;
 }
 
 struct
@@ -270,7 +337,7 @@ struct
 }
 handlers[LASTEvent] =
 {
-  [KeyPress]         = { "KeyPress",          NULL },
+  [KeyPress]         = { "KeyPress",          evt_key_press         },
   [KeyRelease]       = { "KeyRelease",        NULL },
   [ButtonPress]      = { "ButtonPress",       NULL },
   [ButtonRelease]    = { "ButtonRelease",     NULL },
@@ -319,6 +386,9 @@ riftwm_init(riftwm_t *wm)
   if (!(wm->dpy = XOpenDisplay(NULL))) {
     riftwm_error(wm, "Cannot open display");
   }
+
+  XSetErrorHandler(evt_error);
+  XSync(wm->dpy, False);
 
   if (!(wm->screen = XScreenCount(wm->dpy))) {
     riftwm_error(wm, "Cannot get screen count");
@@ -424,7 +494,7 @@ riftwm_init(riftwm_t *wm)
     riftwm_error(wm, "Cannot initialise GLEW");
   }
 
-  // Enable compositing
+  // Composite all window
   XCompositeRedirectSubwindows(wm->dpy, wm->root, CompositeRedirectManual);
 
   // Capture events
@@ -432,6 +502,8 @@ riftwm_init(riftwm_t *wm)
                                   SubstructureNotifyMask |
                                   KeyPressMask |
                                   KeyReleaseMask);
+
+  XSync(wm->dpy, False);
 }
 
 void
@@ -449,8 +521,13 @@ riftwm_run(riftwm_t *wm)
     // Process events
     while (XPending(wm->dpy) > 0) {
       XNextEvent(wm->dpy, &evt);
-      if (evt.type < LASTEvent && handlers[evt.type].func) {
-        handlers[evt.type].func(wm, &evt);
+      if (evt.type < LASTEvent) {
+        if (wm->verbose) {
+          fprintf(stderr, "Event %s\n", handlers[evt.type].name);
+        }
+        if (handlers[evt.type].func) {
+          handlers[evt.type].func(wm, &evt);
+        }
       }
     }
 
@@ -468,11 +545,12 @@ void
 riftwm_destroy(riftwm_t *wm)
 {
   riftwin_t *win, *tmp;
+
   win = wm->windows;
   while (win) {
     tmp = win;
     win = win->next;
-    free_window(wm, win);
+    free_window(wm, tmp);
   }
 
   if (wm->context) {
@@ -486,11 +564,6 @@ riftwm_destroy(riftwm_t *wm)
     wm->overlay = 0;
   }
 
-  if (wm->dpy) {
-    XCloseDisplay(wm->dpy);
-    wm->dpy = NULL;
-  }
-
   if (wm->err_msg) {
     free(wm->err_msg);
     wm->err_msg = NULL;
@@ -499,6 +572,13 @@ riftwm_destroy(riftwm_t *wm)
   if (wm->fb_config) {
     free(wm->fb_config);
     wm->fb_config = NULL;
+  }
+
+  XSync(wm->dpy, True);
+
+  if (wm->dpy) {
+    XCloseDisplay(wm->dpy);
+    wm->dpy = NULL;
   }
 }
 
@@ -532,22 +612,68 @@ riftwm_error(riftwm_t *wm, const char *fmt, ...)
   longjmp(wm->err_jmp, 1);
 }
 
-int
-main()
+// -----------------------------------------------------------------------------
+// Entry point
+// -----------------------------------------------------------------------------
+static void
+usage()
 {
-  riftwm_t wm;
+  puts("RiftWM v0.0.1");
+  puts("Usage:");
+  puts("\triftwm [options]");
+  puts("Options:");
+  puts("\t--quiet: Don't print stuff\n");
+}
 
+int
+main(int argc, char **argv)
+{
+  int c, opt_idx;
+  static struct option options[] =
+  {
+    { "help",    no_argument, NULL,        0   },
+    { "quiet",   no_argument, &wm.verbose, 0   },
+    { NULL,      0,           NULL,        0   }
+  };
+
+  // Parse command line arguments
   memset(&wm, 0, sizeof(wm));
+  wm.verbose = 1;
+  while ((c = getopt_long(argc, argv, "rh", options, &opt_idx)) != -1) {
+    switch (c) {
+      // A flag was set
+      case 0:
+        if (options[opt_idx].flag) {
+          break;
+        }
+        break;
+      // Help was requested or wrong commands given
+      case 'h':
+        usage();
+        return EXIT_SUCCESS;
+      case '?':
+      default:
+        usage();
+        return EXIT_FAILURE;
+    }
+  }
+
+  // Do something with unmatched arguments
+  while (optind < argc) {
+    ++optind;
+  }
+
+  // Register error handler
   if (setjmp(wm.err_jmp)) {
     fprintf(stderr, "Error: %s\n", wm.err_msg);
     riftwm_destroy(&wm);
     return EXIT_FAILURE;
   }
 
+  // Run the wm
   riftwm_init(&wm);
   scan_windows(&wm);
   riftwm_run(&wm);
   riftwm_destroy(&wm);
-
   return EXIT_SUCCESS;
 }

@@ -23,6 +23,7 @@ typedef struct riftwin_t
   int               glx_bound;
   int               width;
   int               height;
+  int               dirty;
 
   struct riftwin_t *next;
 } riftwin_t;
@@ -51,6 +52,7 @@ typedef struct riftwm_t
   jmp_buf                    err_jmp;
   char                      *err_msg;
 
+  int                        verbose;
   volatile int               running;
   riftwin_t                 *windows;
   int                        window_count;
