@@ -111,13 +111,14 @@ add_window(riftwm_t *wm, Window window)
   // Check whether the window is already managed by us
   if (!(win = find_window(wm, window)))
   {
-    // Allocate storage for the structure
     win = (riftwin_t*)malloc(sizeof(riftwin_t));
     memset(win, 0, sizeof(riftwin_t));
     win->window = window;
     win->next = wm->windows;
     win->dirty = 1;
     win->mapped = 0;
+    win->focused = 1;
+
     wm->windows = win;
     wm->window_count++;
   }
@@ -197,10 +198,10 @@ render_window(riftwm_t *wm, riftwin_t *win)
 
   glBindTexture(GL_TEXTURE_2D, win->texture);
   glBegin(GL_QUADS);
-    glTexCoord2f(0.0f, 1.0f); glVertex3f(-0.8f, -0.8f, 0.0f);
-    glTexCoord2f(1.0f, 1.0f); glVertex3f( 0.8f, -0.8f, 0.0f);
-    glTexCoord2f(1.0f, 0.0f); glVertex3f( 0.8f,  0.8f, 0.0f);
-    glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.8f,  0.8f, 0.0f);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, -1.0f, 0.0f);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f( 1.0f, -1.0f, 0.0f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f( 1.0f,  1.0f, 0.0f);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f,  1.0f, 0.0f);
   glEnd();
   glBindTexture(GL_TEXTURE_2D, 0);
 }
@@ -261,15 +262,28 @@ evt_key_press(riftwm_t *wm, XEvent *evt)
 
   keysym = XLookupKeysym(&evt->xkey, 0);
   switch (keysym) {
-    case XK_Escape:
+    case XK_F1:
+    {
       wm->running = 0;
       break;
-    case XK_F1:
+    }
+    case XK_F2:
+    {
       riftwm_restart(wm);
       break;
-    case XK_F2:
-      system("subl &");
+    }
+    default:
+    {
+      riftwin_t *win = wm->windows;
+      while (win) {
+        if (win->focused && win->mapped) {
+          evt->xkey.window = win->window;
+          XSendEvent(wm->dpy, win->window, False, 0, evt);
+        }
+        win = win->next;
+      }
       break;
+    }
   }
 }
 
@@ -298,8 +312,8 @@ evt_configure_request(riftwm_t *wm, XEvent *evt)
   ce.window = win->window;
   ce.x = 0;
   ce.y = 0;
-  ce.width = 500;
-  ce.height = 500;
+  ce.width = 1366;
+  ce.height = 768;
   ce.border_width = 0;
   ce.above = None;
   ce.override_redirect = False;
@@ -314,7 +328,7 @@ evt_map_request(riftwm_t *wm, XEvent *evt)
   win = add_window(wm, evt->xmaprequest.window);
   win->dirty = 1;
 
-  XMoveResizeWindow(wm->dpy, win->window, 0, 0, 500, 500);
+  XMoveResizeWindow(wm->dpy, win->window, 0, 0, 1366, 768);
   XMapWindow(wm->dpy, win->window);
   XFlush(wm->dpy);
 }
@@ -525,7 +539,7 @@ riftwm_restart(riftwm_t * wm)
 {
   struct stat st;
   int length, read;
-  char *path;
+  char *path, *suffix;
 
   if (lstat("/proc/self/exe", &st) == -1) {
     riftwm_error(wm, "Cannot stat /proc/self/exe");
@@ -546,9 +560,14 @@ riftwm_restart(riftwm_t * wm)
 
   path[read] = '\0';
 
-  fprintf(stderr, "Restarting ...\n");
+  // Remove the (deleted) suffix
+  if ((suffix = strstr(path, " (deleted)"))) {
+    *suffix = '\0';
+  }
+
+  fprintf(stderr, "Restarting %s\n", path);
   if (execv(path, NULL) < 0) {
-    riftwm_error(wm, "Restart failed");
+    riftwm_error(wm, "Restart failed (errno: %d)", errno);
   }
 }
 

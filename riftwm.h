@@ -25,6 +25,8 @@ typedef struct riftwin_t
   int               height;
   int               dirty;
   int               mapped;
+  int               focused;
+  char             *name;
 
   struct riftwin_t *next;
 } riftwin_t;
@@ -49,6 +51,10 @@ typedef struct riftwm_t
 
   int                        screen_width;
   int                        screen_height;
+
+  int                        vcursor_x;
+  int                        vcursor_y;
+  int                        vcursor_show;
 
   jmp_buf                    err_jmp;
   char                      *err_msg;
