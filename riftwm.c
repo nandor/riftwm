@@ -272,6 +272,11 @@ evt_key_press(riftwm_t *wm, XEvent *evt)
       riftwm_restart(wm);
       break;
     }
+    case XK_F3:
+    {
+      system("subl &");
+      break;
+    }
     default:
     {
       riftwin_t *win = wm->windows;
@@ -337,9 +342,22 @@ static void
 evt_map_notify(riftwm_t *wm, XEvent *evt)
 {
   riftwin_t *win;
+  XFocusChangeEvent fe;
+
   win = add_window(wm, evt->xmap.window);
   win->mapped = 1;
   win->dirty = 1;
+
+  XSetInputFocus(wm->dpy, win->window, RevertToPointerRoot, CurrentTime);
+
+  fe.type = FocusIn;
+  fe.send_event = True;
+  fe.display = wm->dpy;
+  fe.window = win->window;
+  fe.mode = NotifyNormal;
+  fe.detail = NotifyPointer;
+
+  XSendEvent(wm->dpy, win->window, False, FocusChangeMask, (XEvent*)&fe);
 }
 
 static void
@@ -576,8 +594,8 @@ riftwm_run(riftwm_t *wm)
 {
   XEvent evt;
 
-  XGrabPointer(wm->dpy, wm->root, True, PointerMotionMask,
-               GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
+  //XGrabPointer(wm->dpy, wm->root, True, PointerMotionMask,
+  //             GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
   XGrabKeyboard(wm->dpy, wm->root, True, GrabModeAsync,
                 GrabModeAsync, CurrentTime);
 
@@ -687,7 +705,7 @@ usage()
   puts("Usage:");
   puts("\triftwm [options]");
   puts("Options:");
-  puts("\t--quiet: Don't print stuff\n");
+  puts("\t--verbose: Print more messages\n");
 }
 
 int
@@ -697,13 +715,12 @@ main(int argc, char **argv)
   static struct option options[] =
   {
     { "help",    no_argument, NULL,        0   },
-    { "quiet",   no_argument, &wm.verbose, 0   },
+    { "verbose", no_argument, &wm.verbose, 1   },
     { NULL,      0,           NULL,        0   }
   };
 
   // Parse command line arguments
   memset(&wm, 0, sizeof(wm));
-  wm.verbose = 1;
   while ((c = getopt_long(argc, argv, "rh", options, &opt_idx)) != -1) {
     switch (c) {
       // A flag was set

@@ -1,3 +1,3 @@
 #!/bin/bash
-gvim &
+subl &
 exec build/riftwm
