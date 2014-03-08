@@ -6,13 +6,17 @@
 
 #include <setjmp.h>
 #include <X11/Xlib.h>
-#include <X11/extensions/Xcomposite.h>
+#include <X11/extensions/composite.h>
 #include <openhmd/openhmd.h>
 #include <GL/glew.h>
 #include <GL/glx.h>
 #include "linmath.h"
 
 // -----------------------------------------------------------------------------
+#ifdef __cplusplus
+extern "C"
+{
+#endif 
 typedef void (*glXBindTexImageEXTProc) (Display*, GLXDrawable, int, const int*);
 typedef void (*glXReleaseTexImageEXTProc) (Display*, GLXDrawable, int);
 typedef struct renderer_t renderer_t;
@@ -79,6 +83,7 @@ typedef struct riftwm_t
   ohmd_device               *rift_dev;
   renderer_t                *renderer;
   kinect_t                  *kinect;
+  float                      head_pos[3];
 } riftwm_t;
 
 // -----------------------------------------------------------------------------
@@ -89,5 +94,9 @@ void riftwm_destroy(riftwm_t *);
 void riftwm_restart(riftwm_t *);
 void riftwm_error(riftwm_t *, const char *, ...);
 void riftwin_update(riftwm_t *, riftwin_t *);
+
+#ifdef __cplusplus
+}
+#endif 
 
 #endif

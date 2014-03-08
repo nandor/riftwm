@@ -4,13 +4,21 @@
 #ifndef __KINECT_H__
 #define __KINECT_H__
 
-typedef struct kinect_t
-{
-  riftwm_t      *wm;
-} kinect_t;
+#include "NiteCAPI.h"
+#include "NiteCEnums.h"
+#include "NiteCTypes.h"
 
-kinect_t *kinect_init(riftwm_t *);
-void kinect_update(kinect_t *);
-void kinect_destroy(kinect_t *);
+typedef struct kinect_t kinect_t;
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif 
+	kinect_t *kinect_init(riftwm_t *);
+	void kinect_update(kinect_t *);
+	void kinect_destroy(kinect_t *);
+#ifdef __cplusplus
+}
+#endif 
 
 #endif /*__KINECT_H__*/
