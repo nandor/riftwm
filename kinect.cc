@@ -9,7 +9,7 @@
 #include <NiTE.h>
 #include "riftwm.h"
 #include "kinect.h"
-
+#include "renderer.h"
 
 typedef struct kinect_t
 {
@@ -43,11 +43,8 @@ kinect_init(riftwm_t * wm)
   {
     riftwm_error(wm,"Couldnt initialize UserTracker");
   }
+
   k->found = false;
-
-
-
-
   return k;
 }
 
@@ -64,33 +61,31 @@ kinect_update(kinect_t *k)
     {
       const nite::Skeleton & skeleton = users[i].getSkeleton();
 
-        if (skeleton.getState() == nite::SKELETON_TRACKED)
+      if (skeleton.getState() == nite::SKELETON_TRACKED)
+      {
+        if (!k->found) {
+          k->found = true;
+          k->first_id = users[i].getId();
+        }
+        if (users[i].getId() == k->first_id)
         {
-          if (!k->found) {
-            k->found = true;
-            k->first_id = users[i].getId();
-          }
-          if (users[i].getId() == k->first_id)
-          {
-            const nite::SkeletonJoint & head = skeleton.getJoint(nite::JOINT_HEAD);
-            const nite::Point3f & head_point = head.getPosition();
+          const nite::SkeletonJoint & head = skeleton.getJoint(nite::JOINT_HEAD);
+          const nite::Point3f & head_point = head.getPosition();
 
-            //k->wm->head_pos[0] = head_point.x/1000.0f - k->x_shift;
-            //k->wm->head_pos[1] = head_point.y/1000.0f - k->y_shift;
-            //k->wm->head_pos[2] = head_point.z/1000.0f - k->z_shift;
-            printf("%5.2f, %5.2f, %5.2f \n", head_point.x/1000.0f - k->x_shift,
-                                              head_point.y/1000.0f - k->y_shift,
-                                              head_point.z/1000.0f - k->z_shift);
-          }
-       
+          k->wm->renderer->pos[0] = -(head_point.x / 1000.0f - k->x_shift) * 10.0f;
+          k->wm->renderer->pos[1] = 5.0f -(head_point.y / 1000.0f - k->y_shift) * 5.0f;
+          k->wm->renderer->pos[2] = -(head_point.z / 1000.0f - k->z_shift) * 10.0f;
+          fprintf(stderr, "%f %f %f\n", k->wm->renderer->pos[0],
+                                        k->wm->renderer->pos[1],
+                                        k->wm->renderer->pos[2]);
         }
-        if (skeleton.getState() == nite::SKELETON_NONE) {
-          k->tracker->startSkeletonTracking(users[i].getId());
-          fprintf(stderr, "User found! : none\n");
-        }
-        
+      }
+
+      if (skeleton.getState() == nite::SKELETON_NONE) {
+        k->tracker->startSkeletonTracking(users[i].getId());
+        fprintf(stderr, "User found! : none\n");
+      }
     }
-    
   }
 }
 

@@ -194,23 +194,6 @@ update_windows(riftwm_t *wm)
 }
 
 static void
-render_window(riftwm_t *wm, riftwin_t *win)
-{
-  if (win->dirty) {
-    create_texture(wm, win);
-  }
-
-  glBindTexture(GL_TEXTURE_2D, win->texture);
-  glBegin(GL_QUADS);
-    glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, -1.0f, 0.0f);
-    glTexCoord2f(1.0f, 1.0f); glVertex3f( 1.0f, -1.0f, 0.0f);
-    glTexCoord2f(1.0f, 0.0f); glVertex3f( 1.0f,  1.0f, 0.0f);
-    glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f,  1.0f, 0.0f);
-  glEnd();
-  glBindTexture(GL_TEXTURE_2D, 0);
-}
-
-static void
 scan_windows(riftwm_t *wm)
 {
   Window root, parent, *children;
@@ -261,6 +244,13 @@ evt_key_press(riftwm_t *wm, XEvent *evt)
     case XK_F3:
     {
       system("subl &");
+      break;
+    }
+    case XK_F4:
+    {
+      wm->renderer->pos[0] = 0.0f;
+      wm->renderer->pos[1] = 5.0f;
+      wm->renderer->pos[2] = 0.0f;
       break;
     }
     case XK_w: wm->key_up    = 1; break;

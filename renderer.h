@@ -38,6 +38,9 @@ typedef struct renderer_t
   GLuint            sky_zn;
   GLuint            sky_zp;
 
+  float             leftHand[3];
+  float             rightHand[3];
+
   GLint             u_scr_w;
   GLint             u_scr_h;
 
