@@ -6,14 +6,11 @@ SET(SOURCES riftwm.c
             kinect.cc
             renderer.c)
 
-SET(HEADERS kinect.h
-	          riftwm.h
+SET(HEADERS riftwm.h
             renderer.h
-            kinect.h
-            shader/warp.fs.glsl.h
-            shader/warp.vs.glsl.h)
+            kinect.h)
 
-SET(LIBS GLEW GL GLU X11 Xcomposite Xdamage m openhmd NiTE2 OpenNI2)
+SET(LIBS GLEW GL GLU X11 IL ILU Xcomposite Xdamage m openhmd)
 
 FILE(GLOB_RECURSE SHADERS "shader/*.glsl")
 ADD_CUSTOM_COMMAND(
