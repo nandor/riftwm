@@ -1,17 +1,19 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 PROJECT(riftwm)
 
-SET(SOURCES kinect.c
-	    riftwm.c
+
+SET(SOURCES riftwm.c
+            kinect.cc
             renderer.c)
 
 SET(HEADERS kinect.h
-	    riftwm.h
+	          riftwm.h
             renderer.h
+            kinect.h
             shader/warp.fs.glsl.h
             shader/warp.vs.glsl.h)
 
-SET(LIBS GLEW GL GLU X11 Xcomposite Xdamage m openhmd)
+SET(LIBS GLEW GL GLU X11 Xcomposite Xdamage m openhmd NiTE2 OpenNI2)
 
 FILE(GLOB_RECURSE SHADERS "shader/*.glsl")
 ADD_CUSTOM_COMMAND(
