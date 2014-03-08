@@ -27,3 +27,6 @@ ADD_DEFINITIONS(-D_USE_MATH_DEFINES)
 
 ADD_EXECUTABLE(riftwm ${SOURCES} ${HEADERS})
 TARGET_LINK_LIBRARIES(riftwm ${LIBS})
+
+ADD_EXECUTABLE(kinect_wrapper kinect.cc kinect_wrapper.cc)
+TARGET_LINK_LIBRARIES(kinect_wrapper ${LIBS})

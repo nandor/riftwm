@@ -1,3 +1,4 @@
+#version 120
 // https://github.com/OpenHMD/OpenHMD/blob/master/examples/opengl/shaders/test1.vert.glsl
 uniform sampler2D u_texture;
 uniform int u_scr_w = 640;

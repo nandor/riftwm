@@ -6,17 +6,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <OpenNI.h>
-#include <NiteCAPI.h>
-#include <NiteCEnums.h>
-#include <NiteCTypes.h>
 #include <NiTE.h>
 #include "riftwm.h"
 #include "kinect.h"
+
 
 typedef struct kinect_t
 {
   riftwm_t      *wm;
   nite::UserTracker* tracker;
+  nite::UserId first_id;
+  bool found;
+
   float x_shift,y_shift,z_shift;
 
 } kinect_t;
@@ -25,7 +26,7 @@ kinect_t *
 kinect_init(riftwm_t * wm)
 {
   kinect_t *k;
-  assert((k = (kinect_t*)malloc(sizeof(kinect_t))));
+  k = new kinect_t;
   k->wm = wm;
 
   if (openni::OpenNI::initialize() != openni::STATUS_OK)
@@ -42,6 +43,10 @@ kinect_init(riftwm_t * wm)
   {
     riftwm_error(wm,"Couldnt initialize UserTracker");
   }
+  k->found = false;
+
+
+
 
   return k;
 }
@@ -54,36 +59,38 @@ kinect_update(kinect_t *k)
   const nite::Array<nite::UserData>& users = frame.getUsers();
   if (!users.isEmpty())
   {
-    const nite::Skeleton & skeleton = users[0].getSkeleton();
 
-    if (users[0].isNew())
+    for (int i = 0; i < users.getSize(); ++i)
     {
-      fprintf(stderr, "User found!\n");
+      const nite::Skeleton & skeleton = users[i].getSkeleton();
 
-      const nite::SkeletonJoint & head = skeleton.getJoint(nite::JOINT_HEAD);
-      const nite::Point3f & head_point = head.getPosition();
-      k->wm->head_pos[0] = 0;
-      k->wm->head_pos[1] = 0;
-      k->wm->head_pos[2] = 0;
+        if (skeleton.getState() == nite::SKELETON_TRACKED)
+        {
+          if (!k->found) {
+            k->found = true;
+            k->first_id = users[i].getId();
+          }
+          if (users[i].getId() == k->first_id)
+          {
+            const nite::SkeletonJoint & head = skeleton.getJoint(nite::JOINT_HEAD);
+            const nite::Point3f & head_point = head.getPosition();
 
-      k->x_shift = head_point.x/1000;
-      k->y_shift = head_point.y/1000;
-      k->z_shift = head_point.z/1000;
-
+            //k->wm->head_pos[0] = head_point.x/1000.0f - k->x_shift;
+            //k->wm->head_pos[1] = head_point.y/1000.0f - k->y_shift;
+            //k->wm->head_pos[2] = head_point.z/1000.0f - k->z_shift;
+            printf("%5.2f, %5.2f, %5.2f \n", head_point.x/1000.0f - k->x_shift,
+                                              head_point.y/1000.0f - k->y_shift,
+                                              head_point.z/1000.0f - k->z_shift);
+          }
+       
+        }
+        if (skeleton.getState() == nite::SKELETON_NONE) {
+          k->tracker->startSkeletonTracking(users[i].getId());
+          fprintf(stderr, "User found! : none\n");
+        }
+        
     }
-    else
-    {
-      if (skeleton.getState() == nite::SKELETON_TRACKED)
-      {
-        fprintf(stderr, "Skeleton found!\n");
-        const nite::SkeletonJoint & head = skeleton.getJoint(nite::JOINT_HEAD);
-        const nite::Point3f & head_point = head.getPosition();
-        k->wm->head_pos[0] = head_point.x/1000 - k->x_shift;
-        k->wm->head_pos[1] = head_point.y/1000 - k->y_shift;
-        k->wm->head_pos[2] = head_point.z/1000 - k->z_shift;
-        printf("%5.2f, %5.2f, %5.2f \n", k->wm->head_pos[0],k->wm->head_pos[1],k->wm->head_pos[2]);
-      }
-    }
+    
   }
 }
 
@@ -91,5 +98,5 @@ void
 kinect_destroy(kinect_t *k)
 {
   delete k->tracker;
-  free(k);
+  delete k;
 }
