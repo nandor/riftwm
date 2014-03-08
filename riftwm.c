@@ -12,8 +12,11 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <IL/il.h>
+#include <IL/ilu.h>
 #include "riftwm.h"
 #include "renderer.h"
+#include "kinect.h"
 
 // -----------------------------------------------------------------------------
 // Unique instance referenced by signal handlers
@@ -77,12 +80,11 @@ create_texture(riftwm_t *wm, riftwin_t *win)
 
   // Create the texture
   glBindTexture(GL_TEXTURE_2D, win->texture);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   wm->glXBindTexImageEXT(wm->dpy, win->glx_pixmap, GLX_FRONT_LEFT_EXT, NULL);
-  glGenerateMipmap(GL_TEXTURE_2D);
   glBindTexture(GL_TEXTURE_2D, 0);
 
   win->dirty = 0;
@@ -117,9 +119,9 @@ add_window(riftwm_t *wm, Window window)
     win->dirty = 1;
     win->mapped = 0;
     win->focused = 1;
-    win->pos[0] = (rand() % 100) / 10.0f;
-    win->pos[1] = 5.0f;
-    win->pos[2] = (rand() % 100) / 10.0f;
+    win->pos[0] = 0.0f;
+    win->pos[1] = 0.0f;
+    win->pos[2] = 5.0f;
 
     wm->windows = win;
     wm->window_count++;
@@ -299,9 +301,9 @@ evt_motion_notify(riftwm_t *wm, XEvent *evt)
   int dx = me->x - (wm->screen_width >> 1);
   int dy = me->y - (wm->screen_height >> 1);
 
-  if ((dx != 0 || dy != 0) && wm->has_rift) {
-    wm->renderer->rot_x += dy / 1000.0f;
-    wm->renderer->rot_y += dx / 1000.0f;
+  if ((dx != 0 || dy != 0) && !wm->has_rift) {
+    wm->renderer->rot_x += dy / 100.0f;
+    wm->renderer->rot_y += dx / 100.0f;
 
     wm->renderer->dir[0] = sin(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
     wm->renderer->dir[1] = sin(wm->renderer->rot_x);
@@ -451,6 +453,8 @@ riftwm_init(riftwm_t *wm)
 {
   int event_base, error_base;
   int major, minor, i;
+
+  ilInit();
 
   // Init Xlib
   if (!(wm->dpy = XOpenDisplay(NULL))) {
@@ -659,7 +663,14 @@ riftwm_run(riftwm_t *wm)
 
     // Update position if not using rift
     ohmd_ctx_update(wm->rift_ctx);
-
+    float q[4];
+    ohmd_device_getf(wm->rift_dev, OHMD_ROTATION_QUAT, q);
+    q[0] = 0.0f;
+    q[2] = 0.0f;
+    float l = sqrtf(q[1] * q[1] + q[3] * q[3]);
+    q[1] /= l;
+    q[3] /= l;
+    wm->renderer->rot_y = 2 * acos(q[1]);
     vec3 move_dir = { 0.0f, 0.0f, 0.0f };
 
     if (wm->key_up)

@@ -30,6 +30,14 @@ typedef struct renderer_t
   fbo_t             rightFBO;
   shader_t          warp;
 
+  GLuint            floor;
+  GLuint            sky_xn;
+  GLuint            sky_xp;
+  GLuint            sky_yn;
+  GLuint            sky_yp;
+  GLuint            sky_zn;
+  GLuint            sky_zp;
+
   GLint             u_scr_w;
   GLint             u_scr_h;
 
