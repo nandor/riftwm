@@ -24,7 +24,11 @@ vec2 HmdWarp(vec2 in01, vec2 LensCenter)
 
 void main()
 {
-  // The following two variables need to be set per eye
+  if (abs(gl_FragCoord.x - u_scr_w) < 2) {
+    gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
+    return;
+  }
+
   vec2 LensCenter = gl_FragCoord.x < u_scr_w ? LeftLensCenter : RightLensCenter;
   vec2 ScreenCenter = gl_FragCoord.x < u_scr_w ? LeftScreenCenter : RightScreenCenter;
 

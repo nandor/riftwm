@@ -82,6 +82,7 @@ create_texture(riftwm_t *wm, riftwin_t *win)
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   wm->glXBindTexImageEXT(wm->dpy, win->glx_pixmap, GLX_FRONT_LEFT_EXT, NULL);
+  glGenerateMipmap(GL_TEXTURE_2D);
   glBindTexture(GL_TEXTURE_2D, 0);
 
   win->dirty = 0;
@@ -116,6 +117,9 @@ add_window(riftwm_t *wm, Window window)
     win->dirty = 1;
     win->mapped = 0;
     win->focused = 1;
+    win->pos[0] = (rand() % 100) / 10.0f;
+    win->pos[1] = 5.0f;
+    win->pos[2] = (rand() % 100) / 10.0f;
 
     wm->windows = win;
     wm->window_count++;
@@ -295,7 +299,7 @@ evt_motion_notify(riftwm_t *wm, XEvent *evt)
   int dx = me->x - (wm->screen_width >> 1);
   int dy = me->y - (wm->screen_height >> 1);
 
-  if ((dx != 0 || dy != 0) && !wm->has_rift) {
+  if ((dx != 0 || dy != 0)) {
     wm->renderer->rot_x += dy / 1000.0f;
     wm->renderer->rot_y += dx / 1000.0f;
 
@@ -559,14 +563,14 @@ riftwm_init(riftwm_t *wm)
   }
 
   // Init the oculus
-  wm->has_rift = 0;
-  if ((wm->rift = hmd_open_first(HMD_CAPABILITY_NONE))) {
-    wm->has_rift = 1;
+  if ((wm->rift_ctx = ohmd_ctx_create()) &&
+      ohmd_ctx_probe(wm->rift_ctx) > 0 &&
+      (wm->rift_dev = ohmd_list_open_device(wm->rift_ctx, 0)))
+  {
     fprintf(stderr, "Oculus available!\n");
   } else {
     fprintf(stderr, "Oculus unavailable\n");
   }
-
   // Init the renderer
   if (!(wm->renderer = renderer_init(wm))) {
     riftwm_error(wm, "Cannot initialise the renderer");
@@ -646,41 +650,44 @@ riftwm_run(riftwm_t *wm)
     }
 
     // Update position if not using rift
-    if (!wm->has_rift) {
-      vec3 move_dir = { 0.0f, 0.0f, 0.0f };
+    float rot[3];
+    rot[0] = wm->renderer->rot_x;
+    rot[1] = 0.0f;
+    rot[2] = wm->renderer->rot_y;
 
-      if (wm->key_up)
-      {
-        move_dir[0] += sin(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
-        move_dir[2] += cos(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
-      }
+    ohmd_ctx_update(wm->rift_ctx);
+    ohmd_device_setf(wm->rift_dev, OHMD_POSITION_VECTOR, rot);
 
-      if (wm->key_down)
-      {
-        move_dir[0] -= sin(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
-        move_dir[2] -= cos(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
-      }
+    vec3 move_dir = { 0.0f, 0.0f, 0.0f };
 
-      if (wm->key_left)
-      {
-        move_dir[0] += sin(wm->renderer->rot_y + M_PI / 2.0f) * cos(wm->renderer->rot_x);
-        move_dir[2] += cos(wm->renderer->rot_y + M_PI / 2.0f) * cos(wm->renderer->rot_x);
-      }
+    if (wm->key_up)
+    {
+      move_dir[0] += sin(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
+      move_dir[2] += cos(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
+    }
 
-      if (wm->key_right)
-      {
-        move_dir[0] += sin(wm->renderer->rot_y - M_PI / 2.0f) * cos(wm->renderer->rot_x);
-        move_dir[2] += cos(wm->renderer->rot_y - M_PI / 2.0f) * cos(wm->renderer->rot_x);
-      }
+    if (wm->key_down)
+    {
+      move_dir[0] -= sin(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
+      move_dir[2] -= cos(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
+    }
 
-      if (vec3_len(move_dir) >= 0.1f) {
-        vec3_norm(move_dir, move_dir);
-        vec3_scale(move_dir, move_dir, 0.3f);
-        vec3_add(wm->renderer->pos, wm->renderer->pos, move_dir);
-      }
-    } else {
-      unsigned time;
-      hmd_update(wm->rift, &time);
+    if (wm->key_left)
+    {
+      move_dir[0] += sin(wm->renderer->rot_y + M_PI / 2.0f) * cos(wm->renderer->rot_x);
+      move_dir[2] += cos(wm->renderer->rot_y + M_PI / 2.0f) * cos(wm->renderer->rot_x);
+    }
+
+    if (wm->key_right)
+    {
+      move_dir[0] += sin(wm->renderer->rot_y - M_PI / 2.0f) * cos(wm->renderer->rot_x);
+      move_dir[2] += cos(wm->renderer->rot_y - M_PI / 2.0f) * cos(wm->renderer->rot_x);
+    }
+
+    if (vec3_len(move_dir) >= 0.1f) {
+      vec3_norm(move_dir, move_dir);
+      vec3_scale(move_dir, move_dir, 0.3f);
+      vec3_add(wm->renderer->pos, wm->renderer->pos, move_dir);
     }
 
     // Update window attributes
@@ -703,9 +710,9 @@ riftwm_destroy(riftwm_t *wm)
     wm->renderer = NULL;
   }
 
-  if (wm->rift) {
-    hmd_close(wm->rift);
-    wm->rift = NULL;
+  if (wm->rift_ctx) {
+    ohmd_ctx_destroy(wm->rift_ctx);
+    wm->rift_ctx = NULL;
   }
 
   win = wm->windows;
@@ -775,6 +782,17 @@ riftwm_error(riftwm_t *wm, const char *fmt, ...)
 }
 
 // -----------------------------------------------------------------------------
+// riftwin api
+// -----------------------------------------------------------------------------
+void
+riftwin_update(riftwm_t *wm, riftwin_t *win)
+{
+  if (win->dirty && win->dirty) {
+    create_texture(wm, win);
+    win->dirty = 0;
+  }
+}
+// -----------------------------------------------------------------------------
 // Entry point
 // -----------------------------------------------------------------------------
 static void
@@ -785,7 +803,6 @@ usage()
   puts("\triftwm [options]");
   puts("Options:");
   puts("\t--verbose: Print more messages\n");
-  puts("\t--oculus: True if we have an oculus\n");
 }
 
 int
@@ -796,7 +813,6 @@ main(int argc, char **argv)
   {
     { "help",    no_argument, NULL,            0 },
     { "verbose", no_argument, &wm.verbose,     1 },
-    { "oculus",  no_argument, &wm.has_rift,    1 },
     { NULL,      0,           NULL,            0 }
   };
 

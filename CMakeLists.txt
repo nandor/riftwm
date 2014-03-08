@@ -9,7 +9,7 @@ SET(HEADERS riftwm.h
             shader/warp.fs.glsl.h
             shader/warp.vs.glsl.h)
 
-SET(LIBS GLEW GL GLU X11 Xcomposite Xdamage m vr)
+SET(LIBS GLEW GL GLU X11 Xcomposite Xdamage m openhmd)
 
 FILE(GLOB_RECURSE SHADERS "shader/*.glsl")
 ADD_CUSTOM_COMMAND(

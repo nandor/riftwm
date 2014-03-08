@@ -39,6 +39,7 @@ fbo_init(renderer_t *r, fbo_t * fbo, int width, int height)
   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                          GL_TEXTURE_2D, fbo->depth, 0);
 
+  glEnable(GL_TEXTURE_2D);
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LEQUAL);
 
@@ -133,99 +134,88 @@ renderer_init(riftwm_t *wm)
 static void
 render_scene(renderer_t *r)
 {
-  glColor3f(1.0f, 1.0f, 1.0f);
-  glBegin(GL_QUADS);
-    glVertex3f(-1.0f,  1.0f, 0.0f);
-    glVertex3f( 1.0f,  1.0f, 0.0f);
-    glVertex3f( 1.0f, -1.0f, 0.0f);
-    glVertex3f(-1.0f, -1.0f, 0.0f);
-  glEnd();
+  float depth = 0.0f;
+  riftwin_t *win = r->wm->windows;
+  while (win) {
+    riftwin_update(r->wm, win);
 
-  glColor3f(1.0f, 0.0f, 0.0f);
-  glBegin(GL_QUADS);
-    glVertex3f(-2.0f,  2.0f, 2.0f);
-    glVertex3f( 2.0f,  2.0f, 2.0f);
-    glVertex3f( 2.0f, -2.0f, 2.0f);
-    glVertex3f(-2.0f, -2.0f, 2.0f);
-  glEnd();
+    if (win->mapped) {
+      glBindTexture(GL_TEXTURE_2D, win->texture);
+      glBegin(GL_QUADS);
+        glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f,  1.0f, depth);
+        glTexCoord2f(1.0f, 0.0f); glVertex3f( 1.0f,  1.0f, depth);
+        glTexCoord2f(1.0f, 1.0f); glVertex3f( 1.0f, -1.0f, depth);
+        glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, -1.0f, depth);
+      glEnd();
+    }
+
+    win = win->next;
+    depth += 3.0f;
+  }
 }
 
 void
 renderer_frame(renderer_t *r)
 {
-  if (r->wm->has_rift) {
-    float mat[16];
+  float mat[16];
 
-    // Left eye
-    glBindFramebuffer(GL_FRAMEBUFFER, r->leftFBO.fbo);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glViewport(0, 0, r->wm->screen_width >> 1, r->wm->screen_height);
+  // Left eye
+  glBindFramebuffer(GL_FRAMEBUFFER, r->leftFBO.fbo);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glViewport(0, 0, r->wm->screen_width >> 1, r->wm->screen_height);
 
-    glMatrixMode(GL_PROJECTION);
-    //ohmd_device_getf(r->wm->rift_dev, OHMD_LEFT_EYE_GL_PROJECTION_MATRIX, mat);
-    glLoadMatrixf(mat);
-    glMatrixMode(GL_MODELVIEW);
-    //ohmd_device_getf(r->wm->rift_dev, OHMD_LEFT_EYE_GL_MODELVIEW_MATRIX, mat);
-    glLoadMatrixf(mat);
+  glMatrixMode(GL_PROJECTION);
+  ohmd_device_getf(r->wm->rift_dev, OHMD_LEFT_EYE_GL_PROJECTION_MATRIX, mat);
+  glLoadMatrixf(mat);
+  glMatrixMode(GL_MODELVIEW);
+  ohmd_device_getf(r->wm->rift_dev, OHMD_LEFT_EYE_GL_MODELVIEW_MATRIX, mat);
+  glLoadMatrixf(mat);
+  glTranslatef(r->pos[0], r->pos[1], r->pos[2]);
 
-    render_scene(r);
+  render_scene(r);
 
-    // Right eye
-    glBindFramebuffer(GL_FRAMEBUFFER, r->rightFBO.fbo);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glViewport(0, 0, r->wm->screen_width >> 1, r->wm->screen_height);
+  // Right eye
+  glBindFramebuffer(GL_FRAMEBUFFER, r->rightFBO.fbo);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glViewport(0, 0, r->wm->screen_width >> 1, r->wm->screen_height);
 
-    glMatrixMode(GL_PROJECTION);
-    //ohmd_device_getf(r->wm->rift_dev, OHMD_RIGHT_EYE_GL_PROJECTION_MATRIX, mat);
-    glLoadMatrixf(mat);
-    glMatrixMode(GL_MODELVIEW);
-    //ohmd_device_getf(r->wm->rift_dev, OHMD_RIGHT_EYE_GL_MODELVIEW_MATRIX, mat);
-    glLoadMatrixf(mat);
+  glMatrixMode(GL_PROJECTION);
+  ohmd_device_getf(r->wm->rift_dev, OHMD_RIGHT_EYE_GL_PROJECTION_MATRIX, mat);
+  glLoadMatrixf(mat);
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+  glTranslatef(r->pos[0], r->pos[1], r->pos[2]);
+  ohmd_device_getf(r->wm->rift_dev, OHMD_RIGHT_EYE_GL_MODELVIEW_MATRIX, mat);
+  glLoadMatrixf(mat);
+  glTranslatef(r->pos[0], r->pos[1], r->pos[2]);
 
-    render_scene(r);
+  render_scene(r);
 
-    // Warp
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, r->wm->screen_width, r->wm->screen_height);
-    glUseProgram(r->warp.prog);
+  // Warp
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(0, 0, r->wm->screen_width, r->wm->screen_height);
+  glUseProgram(r->warp.prog);
 
-    glUniform1i(r->u_scr_w, r->wm->screen_width >> 1);
-    glUniform1i(r->u_scr_h, r->wm->screen_height);
+  glUniform1i(r->u_scr_w, r->wm->screen_width >> 1);
+  glUniform1i(r->u_scr_h, r->wm->screen_height);
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
+  glBindTexture(GL_TEXTURE_2D, r->leftFBO.color);
+  glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
+    glTexCoord2f(1.0f, 0.0f); glVertex2f( 0.0f, -1.0f);
+    glTexCoord2f(1.0f, 1.0f); glVertex2f( 0.0f,  1.0f);
+    glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f,  1.0f);
+  glEnd();
 
-    glBindTexture(GL_TEXTURE_2D, r->rightFBO.color);
-    glBegin(GL_QUADS);
-      glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-      glTexCoord2f(1.0f, 0.0f); glVertex2f( 0.0f, -1.0f);
-      glTexCoord2f(1.0f, 1.0f); glVertex2f( 0.0f,  1.0f);
-      glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f,  1.0f);
-    glEnd();
+  glBindTexture(GL_TEXTURE_2D, r->rightFBO.color);
+  glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f); glVertex2f( 0.0f, -1.0f);
+    glTexCoord2f(1.0f, 0.0f); glVertex2f( 1.0f, -1.0f);
+    glTexCoord2f(1.0f, 1.0f); glVertex2f( 1.0f,  1.0f);
+    glTexCoord2f(0.0f, 1.0f); glVertex2f( 0.0f,  1.0f);
+  glEnd();
 
-    glBindTexture(GL_TEXTURE_2D, r->leftFBO.color);
-    glBegin(GL_QUADS);
-      glTexCoord2f(0.0f, 0.0f); glVertex2f( 0.0f, -1.0f);
-      glTexCoord2f(1.0f, 0.0f); glVertex2f( 1.0f, -1.0f);
-      glTexCoord2f(1.0f, 1.0f); glVertex2f( 1.0f,  1.0f);
-      glTexCoord2f(0.0f, 1.0f); glVertex2f( 0.0f,  1.0f);
-    glEnd();
-
-    glUseProgram(0);
-  } else {
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(45.0f, r->aspect, 0.1f, 100.0f);
-    glMatrixMode(GL_MODELVIEW);
-    gluLookAt(r->pos[0], r->pos[1], r->pos[2],
-              r->pos[0] + r->dir[0],
-              r->pos[1] + r->dir[1],
-              r->pos[2] + r->dir[2],
-              0.0f, 1.0f, 0.0f);
-    render_scene(r);
-  }
+  glUseProgram(0);
 }
 
 void

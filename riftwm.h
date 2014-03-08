@@ -7,9 +7,7 @@
 #include <setjmp.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/Xcomposite.h>
-#include <LibVR/display_info.h>
-#include <LibVR/stereo.h>
-#include <LibVR/hmd.h>
+#include <openhmd/openhmd.h>
 #include <GL/glew.h>
 #include <GL/glx.h>
 #include "linmath.h"
@@ -33,6 +31,7 @@ typedef struct riftwin_t
   int               mapped;
   int               focused;
   char             *name;
+  vec3              pos;
 
   struct riftwin_t *next;
 } riftwin_t;
@@ -75,8 +74,8 @@ typedef struct riftwm_t
   riftwin_t                 *windows;
   int                        window_count;
 
-  int                        has_rift;
-  struct hmd                *rift;
+  ohmd_context              *rift_ctx;
+  ohmd_device               *rift_dev;
   renderer_t                *renderer;
   kinect_t                  *kinect;
 } riftwm_t;
@@ -88,5 +87,6 @@ void riftwm_scan(riftwm_t *);
 void riftwm_destroy(riftwm_t *);
 void riftwm_restart(riftwm_t *);
 void riftwm_error(riftwm_t *, const char *, ...);
+void riftwin_update(riftwm_t *, riftwin_t *);
 
 #endif
