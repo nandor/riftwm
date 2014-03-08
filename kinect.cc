@@ -6,6 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <OpenNI.h>
+#include <NiteCAPI.h>
+#include <NiteCEnums.h>
+#include <NiteCTypes.h>
 #include <NiTE.h>
 #include "riftwm.h"
 #include "kinect.h"
@@ -35,11 +38,10 @@ kinect_init(riftwm_t * wm)
   }
 
   k->tracker = new nite::UserTracker();
-  if ( k->tracker->create() != nite::STATUS_OK) 
+  if ( k->tracker->create() != nite::STATUS_OK)
   {
     riftwm_error(wm,"Couldnt initialize UserTracker");
   }
-
 
   return k;
 }
@@ -47,14 +49,16 @@ kinect_init(riftwm_t * wm)
 void
 kinect_update(kinect_t *k)
 {
-  nite::UserTrackerFrameRef* frame;
-  k->tracker->readFrame(frame);
-  const nite::Array<nite::UserData>& users = frame->getUsers();
+  nite::UserTrackerFrameRef frame;
+  k->tracker->readFrame(&frame);
+  const nite::Array<nite::UserData>& users = frame.getUsers();
   if (!users.isEmpty())
   {
     const nite::Skeleton & skeleton = users[0].getSkeleton();
 
-    if (users[0].isNew()) {
+    if (users[0].isNew())
+    {
+      fprintf(stderr, "User found!\n");
 
       const nite::SkeletonJoint & head = skeleton.getJoint(nite::JOINT_HEAD);
       const nite::Point3f & head_point = head.getPosition();
@@ -71,6 +75,7 @@ kinect_update(kinect_t *k)
     {
       if (skeleton.getState() == nite::SKELETON_TRACKED)
       {
+        fprintf(stderr, "Skeleton found!\n");
         const nite::SkeletonJoint & head = skeleton.getJoint(nite::JOINT_HEAD);
         const nite::Point3f & head_point = head.getPosition();
         k->wm->head_pos[0] = head_point.x/1000 - k->x_shift;

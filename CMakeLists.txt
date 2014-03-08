@@ -2,6 +2,8 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 PROJECT(riftwm)
 
 
+INCLUDE_DIRECTORIES(/usr/include/NiTE2)
+
 SET(SOURCES riftwm.c
             kinect.cc
             renderer.c)
@@ -10,7 +12,7 @@ SET(HEADERS riftwm.h
             renderer.h
             kinect.h)
 
-SET(LIBS GLEW GL GLU X11 IL ILU Xcomposite Xdamage m openhmd)
+SET(LIBS GLEW GL GLU X11 IL ILU NiTE2 OpenNI2 Xcomposite Xdamage m openhmd)
 
 FILE(GLOB_RECURSE SHADERS "shader/*.glsl")
 ADD_CUSTOM_COMMAND(
