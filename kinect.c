@@ -6,9 +6,16 @@
 
 
 kinect_t *
-kinect_init(riftwm_t *)
+kinect_init(riftwm_t * riftwm)
 {
+	kinect_t *kinect = (kinect*) malloc(sizeof (kinect_t)); 
+	kinect->tracker  = (NiteUserTrackerHandle*) malloc(sizeof(NiteUserTrackerHandle));
+	trackerHandle = kinect->tracker;
 
+	if ( niteInitializeUserTracker(trackerHandle) != NITE_STATUS_OK) {
+		riftwm_error(riftwm,"Couldnt initialize tracker");
+	}
+	return kinect
 }
 
 void

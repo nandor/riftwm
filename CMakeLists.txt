@@ -1,10 +1,12 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 PROJECT(riftwm)
 
-SET(SOURCES riftwm.c
+SET(SOURCES kinect.c
+	    riftwm.c
             renderer.c)
 
-SET(HEADERS riftwm.h
+SET(HEADERS kinect.h
+	    riftwm.h
             renderer.h
             shader/warp.fs.glsl.h
             shader/warp.vs.glsl.h)

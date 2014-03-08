@@ -6,7 +6,7 @@
 
 #include <setjmp.h>
 #include <X11/Xlib.h>
-#include <X11/extensions/Xcomposite.h>
+#include <X11/extensions/composite.h>
 #include <openhmd/openhmd.h>
 #include <GL/glew.h>
 #include <GL/glx.h>
