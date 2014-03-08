@@ -1,3 +1,2 @@
 #!/bin/bash
-subl &
-exec build/riftwm
+exec strace build/riftwm 2> trace.log

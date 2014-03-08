@@ -6,13 +6,19 @@
 
 #include <setjmp.h>
 #include <X11/Xlib.h>
+#include <X11/extensions/Xcomposite.h>
+#include <LibVR/display_info.h>
+#include <LibVR/stereo.h>
+#include <LibVR/hmd.h>
+#include <GL/glew.h>
+#include <GL/glx.h>
+#include "linmath.h"
 
 // -----------------------------------------------------------------------------
 typedef void (*glXBindTexImageEXTProc) (Display*, GLXDrawable, int, const int*);
 typedef void (*glXReleaseTexImageEXTProc) (Display*, GLXDrawable, int);
 typedef struct renderer_t renderer_t;
 typedef struct kinect_t   kinect_t;
-typedef struct oculus_t   oculus_t;
 
 typedef struct riftwin_t
 {
@@ -56,6 +62,11 @@ typedef struct riftwm_t
   int                        vcursor_y;
   int                        vcursor_show;
 
+  int                        key_up;
+  int                        key_down;
+  int                        key_left;
+  int                        key_right;
+
   jmp_buf                    err_jmp;
   char                      *err_msg;
 
@@ -64,9 +75,10 @@ typedef struct riftwm_t
   riftwin_t                 *windows;
   int                        window_count;
 
+  int                        has_rift;
+  struct hmd                *rift;
   renderer_t                *renderer;
   kinect_t                  *kinect;
-  oculus_t                  *oculus;
 } riftwm_t;
 
 // -----------------------------------------------------------------------------

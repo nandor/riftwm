@@ -12,10 +12,8 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <X11/extensions/Xcomposite.h>
-#include <GL/glew.h>
-#include <GL/glx.h>
 #include "riftwm.h"
+#include "renderer.h"
 
 // -----------------------------------------------------------------------------
 // Unique instance referenced by signal handlers
@@ -207,26 +205,6 @@ render_window(riftwm_t *wm, riftwin_t *win)
 }
 
 static void
-render_windows(riftwm_t *wm)
-{
-  glClearColor(1.0f, 1.0f, 0.0f, 0.5f);
-  glViewport(0, 0, wm->screen_width, wm->screen_height);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  glEnable(GL_TEXTURE_2D);
-
-  riftwin_t *win = wm->windows;
-  while (win) {
-    if (win->mapped) {
-      render_window(wm, win);
-    }
-    win = win->next;
-  }
-
-  glDisable(GL_TEXTURE_2D);
-}
-
-static void
 scan_windows(riftwm_t *wm)
 {
   Window root, parent, *children;
@@ -235,6 +213,7 @@ scan_windows(riftwm_t *wm)
   riftwin_t * win;
 
   XGrabServer(wm->dpy);
+
   if (XQueryTree(wm->dpy, wm->root, &root, &parent, &children, &count)) {
     for (i = 0; i < count; ++i) {
       win = add_window(wm, children[i]);
@@ -249,6 +228,7 @@ scan_windows(riftwm_t *wm)
       XFree(children);
     }
   }
+
   XUngrabServer(wm->dpy);
 }
 
@@ -277,18 +257,54 @@ evt_key_press(riftwm_t *wm, XEvent *evt)
       system("subl &");
       break;
     }
-    default:
-    {
-      riftwin_t *win = wm->windows;
-      while (win) {
-        if (win->focused && win->mapped) {
-          evt->xkey.window = win->window;
-          XSendEvent(wm->dpy, win->window, False, 0, evt);
-        }
-        win = win->next;
-      }
-      break;
+    case XK_w: wm->key_up    = 1; break;
+    case XK_s: wm->key_down  = 1; break;
+    case XK_a: wm->key_left  = 1; break;
+    case XK_d: wm->key_right = 1; break;
+  }
+
+  riftwin_t *win = wm->windows;
+  while (win) {
+    if (win->focused && win->mapped) {
+      evt->xkey.window = win->window;
+      XSendEvent(wm->dpy, win->window, False, 0, evt);
     }
+    win = win->next;
+  }
+}
+
+static void
+evt_key_release(riftwm_t *wm, XEvent *evt)
+{
+  KeySym keysym;
+
+  keysym = XLookupKeysym(&evt->xkey, 0);
+  switch (keysym) {
+    case XK_w: wm->key_up    = 0; break;
+    case XK_s: wm->key_down  = 0; break;
+    case XK_a: wm->key_left  = 0; break;
+    case XK_d: wm->key_right = 0; break;
+  }
+}
+
+static void
+evt_motion_notify(riftwm_t *wm, XEvent *evt)
+{
+  XMotionEvent *me = &evt->xmotion;
+
+  int dx = me->x - (wm->screen_width >> 1);
+  int dy = me->y - (wm->screen_height >> 1);
+
+  if ((dx != 0 || dy != 0) && !wm->has_rift) {
+    wm->renderer->rot_x += dy / 1000.0f;
+    wm->renderer->rot_y += dx / 1000.0f;
+
+    wm->renderer->dir[0] = sin(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
+    wm->renderer->dir[1] = sin(wm->renderer->rot_x);
+    wm->renderer->dir[2] = cos(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
+
+    XWarpPointer(wm->dpy, None, wm->root, 0, 0, 0, 0,
+                 wm->screen_width >> 1, wm->screen_height >> 1);
   }
 }
 
@@ -388,10 +404,10 @@ struct
 handlers[LASTEvent] =
 {
   [KeyPress]         = { "KeyPress",          evt_key_press         },
-  [KeyRelease]       = { "KeyRelease",        NULL },
+  [KeyRelease]       = { "KeyRelease",        evt_key_release       },
   [ButtonPress]      = { "ButtonPress",       NULL },
   [ButtonRelease]    = { "ButtonRelease",     NULL },
-  [MotionNotify]     = { "MotionNotify",      NULL },
+  [MotionNotify]     = { "MotionNotify",      evt_motion_notify     },
   [EnterNotify]      = { "EnterNotify",       NULL },
   [LeaveNotify]      = { "LeaveNotify",       NULL },
   [FocusIn]          = { "FocusIn",           NULL },
@@ -455,7 +471,6 @@ riftwm_init(riftwm_t *wm)
   while (--wm->screen >= 0) {
     wm->screen_width = XDisplayWidth(wm->dpy, wm->screen);
     wm->screen_height = XDisplayHeight(wm->dpy, wm->screen);
-
     if (wm->screen_width == 1280 && wm->screen_height == 800)
     {
       break;
@@ -469,7 +484,9 @@ riftwm_init(riftwm_t *wm)
 
   // Cet the windows on which we'll render
   wm->root = RootWindow(wm->dpy, wm->screen);
-  wm->overlay = XCompositeGetOverlayWindow(wm->dpy, wm->root);
+  if (!(wm->overlay = XCompositeGetOverlayWindow(wm->dpy, wm->root))) {
+    riftwm_error(wm, "Cannot get overlay window");
+  }
 
   // Retrieve all fb configs
   const int FBATTR[] =
@@ -541,6 +558,20 @@ riftwm_init(riftwm_t *wm)
     riftwm_error(wm, "Cannot initialise GLEW");
   }
 
+  // Init the oculus
+  wm->has_rift = 0;
+  if ((wm->rift = hmd_open_first(HMD_CAPABILITY_NONE))) {
+    wm->has_rift = 1;
+    fprintf(stderr, "Oculus available!\n");
+  } else {
+    fprintf(stderr, "Oculus unavailable\n");
+  }
+
+  // Init the renderer
+  if (!(wm->renderer = renderer_init(wm))) {
+    riftwm_error(wm, "Cannot initialise the renderer");
+  }
+
   XCompositeRedirectSubwindows(wm->dpy, wm->root, CompositeRedirectAutomatic);
 
   // Capture events
@@ -594,8 +625,8 @@ riftwm_run(riftwm_t *wm)
 {
   XEvent evt;
 
-  //XGrabPointer(wm->dpy, wm->root, True, PointerMotionMask,
-  //             GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
+  XGrabPointer(wm->dpy, wm->root, True, PointerMotionMask,
+               GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
   XGrabKeyboard(wm->dpy, wm->root, True, GrabModeAsync,
                 GrabModeAsync, CurrentTime);
 
@@ -614,12 +645,50 @@ riftwm_run(riftwm_t *wm)
       }
     }
 
+    // Update position if not using rift
+    if (!wm->has_rift) {
+      vec3 move_dir = { 0.0f, 0.0f, 0.0f };
+
+      if (wm->key_up)
+      {
+        move_dir[0] += sin(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
+        move_dir[2] += cos(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
+      }
+
+      if (wm->key_down)
+      {
+        move_dir[0] -= sin(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
+        move_dir[2] -= cos(wm->renderer->rot_y) * cos(wm->renderer->rot_x);
+      }
+
+      if (wm->key_left)
+      {
+        move_dir[0] += sin(wm->renderer->rot_y + M_PI / 2.0f) * cos(wm->renderer->rot_x);
+        move_dir[2] += cos(wm->renderer->rot_y + M_PI / 2.0f) * cos(wm->renderer->rot_x);
+      }
+
+      if (wm->key_right)
+      {
+        move_dir[0] += sin(wm->renderer->rot_y - M_PI / 2.0f) * cos(wm->renderer->rot_x);
+        move_dir[2] += cos(wm->renderer->rot_y - M_PI / 2.0f) * cos(wm->renderer->rot_x);
+      }
+
+      if (vec3_len(move_dir) >= 0.1f) {
+        vec3_norm(move_dir, move_dir);
+        vec3_scale(move_dir, move_dir, 0.3f);
+        vec3_add(wm->renderer->pos, wm->renderer->pos, move_dir);
+      }
+    } else {
+      unsigned time;
+      hmd_update(wm->rift, &time);
+    }
+
     // Update window attributes
     update_windows(wm);
     XFlush(wm->dpy);
 
     // Display the windows
-    render_windows(wm);
+    renderer_frame(wm->renderer);
     glXSwapBuffers(wm->dpy, wm->overlay);
   }
 }
@@ -628,6 +697,16 @@ void
 riftwm_destroy(riftwm_t *wm)
 {
   riftwin_t *win, *tmp;
+
+  if (wm->renderer) {
+    renderer_destroy(wm->renderer);
+    wm->renderer = NULL;
+  }
+
+  if (wm->rift) {
+    hmd_close(wm->rift);
+    wm->rift = NULL;
+  }
 
   win = wm->windows;
   while (win) {
@@ -706,6 +785,7 @@ usage()
   puts("\triftwm [options]");
   puts("Options:");
   puts("\t--verbose: Print more messages\n");
+  puts("\t--oculus: True if we have an oculus\n");
 }
 
 int
@@ -714,9 +794,10 @@ main(int argc, char **argv)
   int c, opt_idx;
   static struct option options[] =
   {
-    { "help",    no_argument, NULL,        0   },
-    { "verbose", no_argument, &wm.verbose, 1   },
-    { NULL,      0,           NULL,        0   }
+    { "help",    no_argument, NULL,            0 },
+    { "verbose", no_argument, &wm.verbose,     1 },
+    { "oculus",  no_argument, &wm.has_rift,    1 },
+    { NULL,      0,           NULL,            0 }
   };
 
   // Parse command line arguments
