@@ -172,6 +172,9 @@ renderer_frame(renderer_t *r)
   glLoadMatrixf(mat);
   glTranslatef(r->pos[0], r->pos[1], r->pos[2]);
 
+  glRotatef(r->rot_x * 10.0f * M_PI / 2.0f, 1.0f, 0.0f, 0.0f);
+  glRotatef(r->rot_y * 10.0f * M_PI / 2.0f, 0.0f, 1.0f, 0.0f);
+
   render_scene(r);
 
   // Right eye
@@ -187,8 +190,9 @@ renderer_frame(renderer_t *r)
   glTranslatef(r->pos[0], r->pos[1], r->pos[2]);
   ohmd_device_getf(r->wm->rift_dev, OHMD_RIGHT_EYE_GL_MODELVIEW_MATRIX, mat);
   glLoadMatrixf(mat);
+  glRotatef(r->rot_x * 10.0f * M_PI / 2.0f, 1.0f, 0.0f, 0.0f);
+  glRotatef(r->rot_y * 10.0f * M_PI / 2.0f, 0.0f, 1.0f, 0.0f);
   glTranslatef(r->pos[0], r->pos[1], r->pos[2]);
-
   render_scene(r);
 
   // Warp

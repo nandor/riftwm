@@ -10,6 +10,7 @@ typedef struct kinect_t
 } kinect_t;
 
 kinect_t *kinect_init(riftwm_t *);
+void kinect_update(kinect_t *);
 void kinect_destroy(kinect_t *);
 
 #endif /*__KINECT_H__*/

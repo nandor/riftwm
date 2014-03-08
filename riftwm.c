@@ -299,7 +299,7 @@ evt_motion_notify(riftwm_t *wm, XEvent *evt)
   int dx = me->x - (wm->screen_width >> 1);
   int dy = me->y - (wm->screen_height >> 1);
 
-  if ((dx != 0 || dy != 0)) {
+  if ((dx != 0 || dy != 0) && wm->has_rift) {
     wm->renderer->rot_x += dy / 1000.0f;
     wm->renderer->rot_y += dx / 1000.0f;
 
@@ -564,16 +564,24 @@ riftwm_init(riftwm_t *wm)
 
   // Init the oculus
   if ((wm->rift_ctx = ohmd_ctx_create()) &&
-      ohmd_ctx_probe(wm->rift_ctx) > 0 &&
+      (wm->has_rift = ohmd_ctx_probe(wm->rift_ctx)) > 0 &&
       (wm->rift_dev = ohmd_list_open_device(wm->rift_ctx, 0)))
   {
     fprintf(stderr, "Oculus available!\n");
   } else {
     fprintf(stderr, "Oculus unavailable\n");
   }
+
+  wm->has_rift -= 1;
+
   // Init the renderer
   if (!(wm->renderer = renderer_init(wm))) {
     riftwm_error(wm, "Cannot initialise the renderer");
+  }
+
+  // Init the kinect
+  if (!(wm->kinect = kinect_init(wm))) {
+    riftwm_error(wm, "Cannot initialise kinect");
   }
 
   XCompositeRedirectSubwindows(wm->dpy, wm->root, CompositeRedirectAutomatic);
@@ -650,13 +658,7 @@ riftwm_run(riftwm_t *wm)
     }
 
     // Update position if not using rift
-    float rot[3];
-    rot[0] = wm->renderer->rot_x;
-    rot[1] = 0.0f;
-    rot[2] = wm->renderer->rot_y;
-
     ohmd_ctx_update(wm->rift_ctx);
-    ohmd_device_setf(wm->rift_dev, OHMD_POSITION_VECTOR, rot);
 
     vec3 move_dir = { 0.0f, 0.0f, 0.0f };
 
@@ -690,6 +692,9 @@ riftwm_run(riftwm_t *wm)
       vec3_add(wm->renderer->pos, wm->renderer->pos, move_dir);
     }
 
+    // Retrieve kinect data
+    kinect_update(wm->kinect);
+
     // Update window attributes
     update_windows(wm);
     XFlush(wm->dpy);
@@ -708,6 +713,11 @@ riftwm_destroy(riftwm_t *wm)
   if (wm->renderer) {
     renderer_destroy(wm->renderer);
     wm->renderer = NULL;
+  }
+
+  if (wm->kinect) {
+    kinect_destroy(wm->kinect);
+    wm->kinect = NULL;
   }
 
   if (wm->rift_ctx) {

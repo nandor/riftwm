@@ -74,6 +74,7 @@ typedef struct riftwm_t
   riftwin_t                 *windows;
   int                        window_count;
 
+  int                        has_rift;
   ohmd_context              *rift_ctx;
   ohmd_device               *rift_dev;
   renderer_t                *renderer;
