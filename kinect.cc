@@ -197,16 +197,18 @@ kinect_update(kinect_t *k)
             win = win->next;
           }
           printf("\n");
+
           if (max != NULL)
           {
             if (foc != max)
             {
               printf("focused window\n");
               max->focused = 1;
-              foc->focused = 0;
               focus_window(k->wm, max);
             }
-
+          } else {
+            // No window is focused, unfocus old window
+            if (foc) foc->focused = 0;
           }
 
         }
