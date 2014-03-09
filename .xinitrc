@@ -1,3 +1,3 @@
 #!/bin/bash
-xterm &
+subl3 &
 exec build/riftwm

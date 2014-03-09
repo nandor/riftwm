@@ -19,7 +19,6 @@ texture_load(renderer_t *r, GLuint *tex, const char *src)
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 16.0f);
 
   int image;
   ilGenImages(1, &image);
@@ -146,6 +145,7 @@ renderer_init(riftwm_t *wm)
   renderer_t *r;
 
   assert((r = (renderer_t*)malloc(sizeof(renderer_t))));
+  memset(r, 0, sizeof(renderer_t));
   r->wm = wm;
   r->aspect = (wm->screen_width / 2.0f) / (float)wm->screen_height;
   r->rot_x = 0.0f;
@@ -185,24 +185,19 @@ render_scene(renderer_t *r)
   while (win) {
     riftwin_update(r->wm, win);
     if (win->mapped) {
-      glPushMatrix();
-      //glTranslatef(win->pos[0], win->pos[1], win->pos[2]);
-      //glGetFloatv (GL_MODELVIEW_MATRIX, mat);
+      float height = 2.0f;
+      float width = win->height * height / win->width;
 
-      //d = sqrtf(mat[0] * mat[0] + mat[1] * mat[1] + mat[2] * mat[2]);
-      //mat[0] = 1.0f; mat[4] = 0.0f; mat[8]  = 0.0f;
-      //mat[1] = 0.0f; mat[5] = 1.0f; mat[9]  = 0.0f;
-      //mat[2] = 0.0f; mat[6] = 0.0f; mat[10] = 1.0f;
-      //glLoadMatrixf(mat);
+      glPushMatrix();
       glRotatef((M_PI - r->rot_y)  * 180.0f / M_PI, 0.0f, 1.0f, 0.0f);
 
       glBindTexture(GL_TEXTURE_2D, win->texture);
       glGenerateMipmap(GL_TEXTURE_2D);
       glBegin(GL_QUADS);
-        glTexCoord2f(0.0f, 0.0f); glVertex3f(- 1.0f,   1.0f, 0.0f);
-        glTexCoord2f(1.0f, 0.0f); glVertex3f(  1.0f,   1.0f, 0.0f);
-        glTexCoord2f(1.0f, 1.0f); glVertex3f(  1.0f, - 1.0f, 0.0f);
-        glTexCoord2f(0.0f, 1.0f); glVertex3f(- 1.0f, - 1.0f, 0.0f);
+        glTexCoord2f(0.0f, 0.0f); glVertex3f(-width,  height, 0.0f);
+        glTexCoord2f(1.0f, 0.0f); glVertex3f( width,  height, 0.0f);
+        glTexCoord2f(1.0f, 1.0f); glVertex3f( width, -height, 0.0f);
+        glTexCoord2f(0.0f, 1.0f); glVertex3f(-width, -height, 0.0f);
       glEnd();
       glPopMatrix();
     }
@@ -210,6 +205,26 @@ render_scene(renderer_t *r)
     win = win->next;
     depth += 3.0f;
   }
+
+  GLUquadricObj *q = gluNewQuadric();
+
+  glColor3f(1.0f, 0.0f, 0.0f);
+
+  glPushMatrix();
+  glTranslatef(-r->leftHand[0], -r->leftHand[1], -r->leftHand[2]);
+  glDisable(GL_TEXTURE_2D);
+  gluSphere(q, 0.5f, 16, 16);
+  glEnable(GL_TEXTURE_2D);
+  glPopMatrix();
+
+  glPushMatrix();
+  glTranslatef(-r->rightHand[0], -r->rightHand[1], -r->rightHand[2]);
+  glDisable(GL_TEXTURE_2D);
+  gluSphere(q, 0.5f, 16, 16);
+  glEnable(GL_TEXTURE_2D);
+  glPopMatrix();
+
+  glColor3f(1.0f, 1.0f, 1.0f);
 
   // Render floor
   glBindTexture(GL_TEXTURE_2D, r->floor);
@@ -276,7 +291,6 @@ renderer_frame(renderer_t *r)
   ohmd_device_getf(r->wm->rift_dev, OHMD_LEFT_EYE_GL_MODELVIEW_MATRIX, mat);
   glLoadMatrixf(mat);
   glTranslatef(r->pos[0], r->pos[1], r->pos[2]);
-
   render_scene(r);
 
   // Right eye
@@ -292,8 +306,6 @@ renderer_frame(renderer_t *r)
   ohmd_device_getf(r->wm->rift_dev, OHMD_RIGHT_EYE_GL_MODELVIEW_MATRIX, mat);
   glLoadMatrixf(mat);
   glTranslatef(r->pos[0], r->pos[1], r->pos[2]);
-
-
   render_scene(r);
 
   // Warp

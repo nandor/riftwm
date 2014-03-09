@@ -246,13 +246,6 @@ evt_key_press(riftwm_t *wm, XEvent *evt)
       system("subl &");
       break;
     }
-    case XK_F4:
-    {
-      wm->renderer->pos[0] = 0.0f;
-      wm->renderer->pos[1] = 5.0f;
-      wm->renderer->pos[2] = 0.0f;
-      break;
-    }
     case XK_w: wm->key_up    = 1; break;
     case XK_s: wm->key_down  = 1; break;
     case XK_a: wm->key_left  = 1; break;

@@ -44,6 +44,8 @@ kinect_init(riftwm_t * wm)
     riftwm_error(wm,"Couldnt initialize UserTracker");
   }
 
+  k->z_shift = 2.0f;
+
   k->found = false;
   return k;
 }
@@ -69,40 +71,34 @@ kinect_update(kinect_t *k)
         }
         if (users[i].getId() == k->first_id)
         {
-          
-
-          // updating the position of the head
           const nite::SkeletonJoint & head = skeleton.getJoint(nite::JOINT_HEAD);
           const nite::Point3f & head_point = head.getPosition();
 
-          k->wm->renderer->pos[0] = -(head_point.x / 1000.0f ) * 10.0f;
-          k->wm->renderer->pos[1] = 5.0f -(head_point.y / 1000.0f ) * 5.0f;
-          k->wm->renderer->pos[2] = -(head_point.z / 1000.0f ) * 10.0f;
-          fprintf(stderr, "%f %f %f\n", k->wm->renderer->pos[0],
-                                        k->wm->renderer->pos[1],
-                                        k->wm->renderer->pos[2]);
-          // updating the posintion of hands
+          if (!k->wm->renderer->has_origin) {
+            k->wm->renderer->has_origin = 1;
+            k->wm->renderer->pos[0] = k->wm->renderer->origin[0] = k->wm->renderer->origin[0] - (head_point.x / 1000.0f - k->x_shift) * 10.0f;
+            k->wm->renderer->pos[1] = k->wm->renderer->origin[1] = k->wm->renderer->origin[1] - (head_point.y / 1000.0f - k->y_shift) * 5.0f + 0.25f;
+            k->wm->renderer->pos[2] = k->wm->renderer->origin[2] = k->wm->renderer->origin[2] - (head_point.z / 1000.0f - k->z_shift) * 10.0f;
+          } else {
+            k->wm->renderer->pos[0] = k->wm->renderer->origin[0] - (head_point.x / 1000.0f - k->x_shift) * 10.0f;
+            k->wm->renderer->pos[1] = k->wm->renderer->origin[1] - (head_point.y / 1000.0f - k->y_shift) * 5.0f;
+            k->wm->renderer->pos[2] = k->wm->renderer->origin[2] - (head_point.z / 1000.0f - k->z_shift) * 10.0f;
 
-          const nite::SkeletonJoint & left_hand = skeleton.getJoint(nite::JOINT_LEFT_HAND);
-          const nite::Point3f & left_hand_point = left_hand.getPosition();
+            const nite::SkeletonJoint & left_hand = skeleton.getJoint(nite::JOINT_LEFT_HAND);
+            const nite::Point3f & left_hand_point = left_hand.getPosition();
 
-          k->wm->renderer->leftHand[0] = -(left_hand_point.x / 1000.0f ) * 10.0f;
-          k->wm->renderer->leftHand[1] = 5.0f -(left_hand_point.y / 1000.0f ) * 5.0f;
-          k->wm->renderer->leftHand[2] = -(left_hand_point.z / 1000.0f ) * 10.0f;
-          fprintf(stderr, "%f %f %f\n", k->wm->renderer->leftHand[0],
-                                        k->wm->renderer->leftHand[1],
-                                        k->wm->renderer->leftHand[2]);
+            k->wm->renderer->leftHand[0] = k->wm->renderer->origin[0] - (left_hand_point.x / 1000.0f - k->x_shift) * 10.0f;
+            k->wm->renderer->leftHand[1] = k->wm->renderer->origin[1] - (left_hand_point.y / 1000.0f - k->y_shift) * 5.0f;
+            k->wm->renderer->leftHand[2] = k->wm->renderer->origin[2] - (left_hand_point.z / 1000.0f - k->z_shift) * 10.0f;
 
-          const nite::SkeletonJoint & right_hand = skeleton.getJoint(nite::JOINT_RIGHT_HAND);
-          const nite::Point3f & right_hand_point = right_hand.getPosition();
+            const nite::SkeletonJoint & right_hand = skeleton.getJoint(nite::JOINT_RIGHT_HAND);
+            const nite::Point3f & right_hand_point = right_hand.getPosition();
 
-          k->wm->renderer->rightHand[0] = -(right_hand_point.x / 1000.0f ) * 10.0f;
-          k->wm->renderer->rightHand[1] = 5.0f -(right_hand_point.y / 1000.0f ) * 5.0f;
-          k->wm->renderer->rightHand[2] = -(right_hand_point.z / 1000.0f ) * 10.0f;
-          fprintf(stderr, "%f %f %f\n", k->wm->renderer->rightHand[0],
-                                        k->wm->renderer->rightHand[1],
-                                        k->wm->renderer->rightHand[2]);
-
+            k->wm->renderer->rightHand[0] = k->wm->renderer->origin[0] -(right_hand_point.x / 1000.0f - k->x_shift) * 10.0f;
+            k->wm->renderer->rightHand[1] = k->wm->renderer->origin[1] -(right_hand_point.y / 1000.0f - k->y_shift) * 5.0f;
+            k->wm->renderer->rightHand[2] = k->wm->renderer->origin[2] -(right_hand_point.z / 1000.0f - k->z_shift) * 10.0f;
+          }
+          fprintf(stderr, "%f %f %f\n", k->wm->renderer->origin[0], k->wm->renderer->origin[1], k->wm->renderer->origin[2]);
         }
       }
 
