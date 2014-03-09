@@ -10,6 +10,7 @@
 #include "riftwm.h"
 #include "kinect.h"
 #include "renderer.h"
+#include "linmath.h"
 
 #define SAMPLES 20
 
@@ -164,6 +165,23 @@ kinect_update(kinect_t *k)
           k->r->rightHand[2] = (k->z_shift - hz) / 200.0f - k->r->origin[2];
 
           fprintf(stderr, "%f %f %f\n", k->r->pos[0], k->r->pos[1], k->r->pos[2]);
+          vec3 to_hand;
+          vec3_sub(to_hand, k->r->rightHand, k->r->pos);
+
+          riftwin_t *win = k->r->wm->windows;
+          while (win) {
+            if (win->mapped) {
+              vec3 to_win;
+              vec3_sub(to_win, win->pos, k->r->pos);
+
+              float cos_th = vec3_mul_inner(to_win, to_hand)/vec3_len(to_hand)/vec3_len(to_win);
+
+              printf("%f ", cos_th);
+            }
+            win = win->next;
+          }
+          printf("/n");
+
         }
       }
 
