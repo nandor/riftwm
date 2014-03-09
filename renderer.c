@@ -193,6 +193,9 @@ render_scene(renderer_t *r)
       float width = win->height * height / win->width;
 
       glPushMatrix();
+      if (win->focused) {
+        glColor3f(1.0f, 0.0f, 0.0f);
+      }
       glBindTexture(GL_TEXTURE_2D, win->texture);
       glGenerateMipmap(GL_TEXTURE_2D);
       glBegin(GL_QUADS);
@@ -201,6 +204,7 @@ render_scene(renderer_t *r)
         glTexCoord2f(1.0f, 1.0f); glVertex3f( width, -height, 0.0f);
         glTexCoord2f(0.0f, 1.0f); glVertex3f(-width, -height, 0.0f);
       glEnd();
+      glColor3f(1.0f, 1.0f, 1.0f);
       glPopMatrix();
     }
 
