@@ -121,7 +121,7 @@ add_window(riftwm_t *wm, Window window)
     //win->focused = 1; // Don't focus for now - we use arm pointing focus
     win->pos[0] = 0.0f;
     win->pos[1] = 0.0f;
-    win->pos[2] = 5.0f;
+    win->pos[2] = 0.0f;
 
     wm->windows = win;
     wm->window_count++;

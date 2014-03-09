@@ -34,6 +34,7 @@ typedef struct riftwin_t
   int               dirty;
   int               mapped;
   int               focused;
+  int               moving;
   char             *name;
   vec3              pos;
   vec3              rot;

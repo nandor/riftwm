@@ -28,6 +28,7 @@ typedef struct kinect_t
   nite::UserTracker* tracker;
   nite::UserId first_id;
   bool found;
+  riftwin_t       *focused;
 
   float x_shift,y_shift,z_shift;
   smooth_t       s_pos;
@@ -101,7 +102,7 @@ kinect_init(riftwm_t * wm)
   k->y_shift = 0.0f;
   k->z_shift = 0.0f;
   k->s_pos.wrap = 0;
-
+  k->focused = NULL;
   k->found = false;
   return k;
 }
@@ -116,6 +117,9 @@ bool signal(nite::Point3f hand, nite::Point3f elbow)
 
   return (ydiff/dist - 1)*(ydiff/dist - 1) < 0.002;
 }
+
+// REALLY BAD THING, but i'm too tired
+static float ratio = 0.0f;
 
 void
 kinect_update(kinect_t *k)
@@ -185,6 +189,18 @@ kinect_update(kinect_t *k)
           riftwin_t *max = NULL;
           riftwin_t *foc = NULL;
           float max_cos = -2.0f;
+
+          int handsUp = signal(left_hand_point, left_elbow_point);
+          if (k->focused) {
+            k->focused->moving = 0;
+            if (handsUp) {
+              k->focused->pos[0] = -k->r->rightHand[0];
+              k->focused->pos[1] = -k->r->rightHand[1];
+              k->focused->pos[2] = -k->r->rightHand[2];
+              k->focused->moving = 1;
+            }
+          }
+
           while (win)
           {
             if (win->mapped)
@@ -193,35 +209,44 @@ kinect_update(kinect_t *k)
                 foc = win;
               }
 
-              vec3 to_win;
-              vec3_sub(to_win, win->pos, k->r->pos);
+              float temp[3];
+              temp[0] = -win->pos[0];
+              temp[1] = -win->pos[1];
+              temp[2] = -win->pos[2];
 
-              float cos_th = vec3_mul_inner(to_win, to_hand)/vec3_len(to_hand)/vec3_len(to_win);
+              vec3 to_win, to_hand;
+              vec3_sub(to_hand, k->r->rightHand, k->r->pos);
+              vec3_sub(to_win, temp, k->r->pos);
+              if (win != k->focused) {
+                ratio = vec3_len(to_win) / vec3_len(to_hand);
+              }
+              vec3_norm(to_win, to_win);
+              vec3_norm(to_hand, to_hand);
 
-              if (cos_th > 0.98 && cos_th > max_cos)
+              float cos_th = vec3_mul_inner(to_win, to_hand);
+
+              if (cos_th > 0.96 && cos_th > max_cos)
               {
                 max_cos = cos_th;
                 max = win;
               }
-
-              printf("cos %f ", cos_th);
-
             }
             win = win->next;
           }
-          printf("\n");
 
-          if (max != NULL && signal(left_hand_point, left_elbow_point) )
+          if (max != NULL)
           {
             if (foc != max)
             {
               printf("focused window\n");
               max->focused = 1;
-              focus_window(k->wm, max);
+              k->focused = max;
+              //focus_window(k->wm, max);
             }
-          } else {
+          } else if (handsUp == 0) {
             // No window is focused, unfocus old window
             if (foc) foc->focused = 0;
+            k->focused = NULL;
           }
 
         }

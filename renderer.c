@@ -193,9 +193,13 @@ render_scene(renderer_t *r)
       float width = win->height * height / win->width;
 
       glPushMatrix();
-      if (win->focused) {
+      glTranslatef(win->pos[0], win->pos[1], win->pos[2]);
+      if (win->moving) {
+        glColor3f(0.0f, 1.0f, 0.0f);
+      } else if (win->focused) {
         glColor3f(1.0f, 0.0f, 0.0f);
       }
+
       glBindTexture(GL_TEXTURE_2D, win->texture);
       glGenerateMipmap(GL_TEXTURE_2D);
       glBegin(GL_QUADS);
