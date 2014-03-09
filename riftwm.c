@@ -221,6 +221,23 @@ scan_windows(riftwm_t *wm)
   XUngrabServer(wm->dpy);
 }
 
+void
+focus_window(riftwm_t *wm, riftwin_t *win)
+{
+  XFocusChangeEvent fe;
+
+  XSetInputFocus(wm->dpy, win->window, RevertToPointerRoot, CurrentTime);
+
+  fe.type = FocusIn;
+  fe.send_event = True;
+  fe.display = wm->dpy;
+  fe.window = win->window;
+  fe.mode = NotifyNormal;
+  fe.detail = NotifyPointer;
+
+  XSendEvent(wm->dpy, win->window, False, FocusChangeMask, (XEvent*)&fe);
+}
+
 // -----------------------------------------------------------------------------
 // X Event handlers
 // -----------------------------------------------------------------------------
@@ -347,22 +364,12 @@ static void
 evt_map_notify(riftwm_t *wm, XEvent *evt)
 {
   riftwin_t *win;
-  XFocusChangeEvent fe;
 
   win = add_window(wm, evt->xmap.window);
   win->mapped = 1;
   win->dirty = 1;
 
-  XSetInputFocus(wm->dpy, win->window, RevertToPointerRoot, CurrentTime);
-
-  fe.type = FocusIn;
-  fe.send_event = True;
-  fe.display = wm->dpy;
-  fe.window = win->window;
-  fe.mode = NotifyNormal;
-  fe.detail = NotifyPointer;
-
-  XSendEvent(wm->dpy, win->window, False, FocusChangeMask, (XEvent*)&fe);
+  focus_window(wm, win);
 }
 
 static void
