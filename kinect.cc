@@ -168,19 +168,46 @@ kinect_update(kinect_t *k)
           vec3 to_hand;
           vec3_sub(to_hand, k->r->rightHand, k->r->pos);
 
-          riftwin_t *win = k->r->wm->windows;
-          while (win) {
-            if (win->mapped) {
+          riftwin_t *win = k->wm->windows;
+          riftwin_t *max = NULL;
+          riftwin_t *foc = NULL;
+          float max_cos = -2.0f;
+          while (win)
+          {
+            if (win->mapped)
+            {
+              if(win->focused) {
+                foc = win;
+              }
+
               vec3 to_win;
               vec3_sub(to_win, win->pos, k->r->pos);
 
               float cos_th = vec3_mul_inner(to_win, to_hand)/vec3_len(to_hand)/vec3_len(to_win);
 
-              printf("%f ", cos_th);
+              if (cos_th > 0.98 && cos_th > max_cos)
+              {
+                max_cos = cos_th;
+                max = win;
+              }
+
+              printf("cos %f ", cos_th);
+
             }
             win = win->next;
           }
-          printf("/n");
+          printf("\n");
+          if (max != NULL)
+          {
+            if (foc != max)
+            {
+              printf("focused window\n");
+              max->focused = 1;
+              foc->focused = 0;
+              focus_window(k->wm, max);
+            }
+
+          }
 
         }
       }
