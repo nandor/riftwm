@@ -106,6 +106,17 @@ kinect_init(riftwm_t * wm)
   return k;
 }
 
+bool signal(nite::Point3f hand, nite::Point3f elbow)
+{
+  printf("hand %f %f %f\n", hand.x, hand.y, hand.z);
+  float ydiff = hand.y - elbow.y;
+  float dist = sqrt((hand.x - elbow.x)*(hand.x - elbow.x) +
+            (hand.y - elbow.y)*(hand.y - elbow.y) +
+            (hand.z - elbow.z)*(hand.z - elbow.z));
+
+  return (ydiff/dist - 1)*(ydiff/dist - 1) < 0.002;
+}
+
 void
 kinect_update(kinect_t *k)
 {
@@ -130,10 +141,12 @@ kinect_update(kinect_t *k)
         {
           const nite::SkeletonJoint & head = skeleton.getJoint(nite::JOINT_HEAD);
           const nite::SkeletonJoint & left_hand = skeleton.getJoint(nite::JOINT_LEFT_HAND);
+          const nite::SkeletonJoint & left_elbow = skeleton.getJoint(nite::JOINT_LEFT_ELBOW);
           const nite::SkeletonJoint & right_hand = skeleton.getJoint(nite::JOINT_RIGHT_HAND);
           const nite::Point3f & head_point = head.getPosition();
           const nite::Point3f & left_hand_point = left_hand.getPosition();
           const nite::Point3f & right_hand_point = right_hand.getPosition();
+          const nite::Point3f & left_elbow_point = left_elbow.getPosition();
           float hx, hy, hz;
 
           if (!k->wm->renderer->has_origin) {
@@ -198,7 +211,7 @@ kinect_update(kinect_t *k)
           }
           printf("\n");
 
-          if (max != NULL)
+          if (max != NULL && signal(left_hand_point, left_elbow_point) )
           {
             if (foc != max)
             {
