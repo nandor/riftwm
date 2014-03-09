@@ -11,16 +11,67 @@
 #include "kinect.h"
 #include "renderer.h"
 
+#define SAMPLES 20
+
+typedef struct smooth_t
+{
+  int index;
+  int wrap;
+  float pos[SAMPLES][3];
+} smooth_t;
+
 typedef struct kinect_t
 {
   riftwm_t      *wm;
+  renderer_t    *r;
   nite::UserTracker* tracker;
   nite::UserId first_id;
   bool found;
 
   float x_shift,y_shift,z_shift;
-
+  smooth_t       s_pos;
 } kinect_t;
+
+static void
+smooth_add(smooth_t *s, float x, float y, float z)
+{
+  s->pos[s->index][0] = x;
+  s->pos[s->index][1] = y;
+  s->pos[s->index][2] = z;
+
+  ++s->index;
+  if (s->index >= SAMPLES) {
+    s->index = 0;
+    s->wrap = 1;
+  }
+}
+
+static void
+smooth_get(smooth_t *s, float *x, float *y, float *z)
+{
+  float acc[3] = { 0.0f, 0.0f, 0.0f };
+  int count = 0;
+
+  if (!s->wrap) {
+    for (int i = 0; i < s->index; ++i) {
+      acc[0] += s->pos[i][0];
+      acc[1] += s->pos[i][1];
+      acc[2] += s->pos[i][2];
+      ++count;
+    }
+  } else {
+    for (int i = 0; i < SAMPLES; ++i) {
+      acc[0] += s->pos[i][0];
+      acc[1] += s->pos[i][1];
+      acc[2] += s->pos[i][2];
+      ++count;
+    }
+  }
+
+  *z = acc[0] / count;
+  *y = acc[1] / count;
+  *z = acc[2] / count;
+}
 
 kinect_t *
 kinect_init(riftwm_t * wm)
@@ -28,6 +79,7 @@ kinect_init(riftwm_t * wm)
   kinect_t *k;
   k = new kinect_t;
   k->wm = wm;
+  k->r = wm->renderer;
 
   if (openni::OpenNI::initialize() != openni::STATUS_OK)
   {
@@ -44,7 +96,10 @@ kinect_init(riftwm_t * wm)
     riftwm_error(wm,"Couldnt initialize UserTracker");
   }
 
-  k->z_shift = 2.0f;
+  k->x_shift = 0.0f;
+  k->y_shift = 0.0f;
+  k->z_shift = 0.0f;
+  k->s_pos.wrap = 0;
 
   k->found = false;
   return k;
@@ -69,36 +124,46 @@ kinect_update(kinect_t *k)
           k->found = true;
           k->first_id = users[i].getId();
         }
+
         if (users[i].getId() == k->first_id)
         {
           const nite::SkeletonJoint & head = skeleton.getJoint(nite::JOINT_HEAD);
+          const nite::SkeletonJoint & left_hand = skeleton.getJoint(nite::JOINT_LEFT_HAND);
+          const nite::SkeletonJoint & right_hand = skeleton.getJoint(nite::JOINT_RIGHT_HAND);
           const nite::Point3f & head_point = head.getPosition();
+          const nite::Point3f & left_hand_point = left_hand.getPosition();
+          const nite::Point3f & right_hand_point = right_hand.getPosition();
+          float hx, hy, hz;
 
           if (!k->wm->renderer->has_origin) {
-            k->wm->renderer->has_origin = 1;
-            k->wm->renderer->pos[0] = k->wm->renderer->origin[0] = k->wm->renderer->origin[0] - (head_point.x / 1000.0f - k->x_shift) * 10.0f;
-            k->wm->renderer->pos[1] = k->wm->renderer->origin[1] = k->wm->renderer->origin[1] - (head_point.y / 1000.0f - k->y_shift) * 5.0f + 0.25f;
-            k->wm->renderer->pos[2] = k->wm->renderer->origin[2] = k->wm->renderer->origin[2] - (head_point.z / 1000.0f - k->z_shift) * 10.0f;
-          } else {
-            k->wm->renderer->pos[0] = k->wm->renderer->origin[0] - (head_point.x / 1000.0f - k->x_shift) * 10.0f;
-            k->wm->renderer->pos[1] = k->wm->renderer->origin[1] - (head_point.y / 1000.0f - k->y_shift) * 5.0f;
-            k->wm->renderer->pos[2] = k->wm->renderer->origin[2] - (head_point.z / 1000.0f - k->z_shift) * 10.0f;
-
-            const nite::SkeletonJoint & left_hand = skeleton.getJoint(nite::JOINT_LEFT_HAND);
-            const nite::Point3f & left_hand_point = left_hand.getPosition();
-
-            k->wm->renderer->leftHand[0] = k->wm->renderer->origin[0] - (left_hand_point.x / 1000.0f - k->x_shift) * 10.0f;
-            k->wm->renderer->leftHand[1] = k->wm->renderer->origin[1] - (left_hand_point.y / 1000.0f - k->y_shift) * 5.0f;
-            k->wm->renderer->leftHand[2] = k->wm->renderer->origin[2] - (left_hand_point.z / 1000.0f - k->z_shift) * 10.0f;
-
-            const nite::SkeletonJoint & right_hand = skeleton.getJoint(nite::JOINT_RIGHT_HAND);
-            const nite::Point3f & right_hand_point = right_hand.getPosition();
-
-            k->wm->renderer->rightHand[0] = k->wm->renderer->origin[0] -(right_hand_point.x / 1000.0f - k->x_shift) * 10.0f;
-            k->wm->renderer->rightHand[1] = k->wm->renderer->origin[1] -(right_hand_point.y / 1000.0f - k->y_shift) * 5.0f;
-            k->wm->renderer->rightHand[2] = k->wm->renderer->origin[2] -(right_hand_point.z / 1000.0f - k->z_shift) * 10.0f;
+            k->r->has_origin = 1;
+            k->x_shift = head_point.x;
+            k->y_shift = head_point.y;
+            k->z_shift = head_point.z;
           }
-          fprintf(stderr, "%f %f %f\n", k->wm->renderer->origin[0], k->wm->renderer->origin[1], k->wm->renderer->origin[2]);
+
+
+          // Update the head position
+          hx = head_point.x, hy = head_point.y, hz = head_point.z;
+          smooth_add(&k->s_pos, head_point.x, head_point.y, head_point.z);
+          smooth_get(&k->s_pos, &hx, &hy, &hz);
+          k->r->pos[0] = (k->x_shift - hx) / 200.0f - k->r->origin[0];
+          k->r->pos[1] = (k->y_shift - hy) / 200.0f - k->r->origin[1];
+          k->r->pos[2] = (k->z_shift - hz) / 200.0f - k->r->origin[2];
+
+          // Left hand
+          hx = left_hand_point.x, hy = left_hand_point.y, hz = left_hand_point.z;
+          k->r->leftHand[0] = (k->x_shift - hx) / 200.0f - k->r->origin[0];
+          k->r->leftHand[1] = (k->y_shift - hy) / 200.0f - k->r->origin[1];
+          k->r->leftHand[2] = (k->z_shift - hz) / 200.0f - k->r->origin[2];
+
+          // Right hand
+          hx = right_hand_point.x, hy = right_hand_point.y, hz = right_hand_point.z;
+          k->r->rightHand[0] = (k->x_shift - hx) / 200.0f - k->r->origin[0];
+          k->r->rightHand[1] = (k->y_shift - hy) / 200.0f - k->r->origin[1];
+          k->r->rightHand[2] = (k->z_shift - hz) / 200.0f - k->r->origin[2];
+
+          fprintf(stderr, "%f %f %f\n", k->r->pos[0], k->r->pos[1], k->r->pos[2]);
         }
       }
 

@@ -16,7 +16,7 @@
 #ifdef __cplusplus
 extern "C"
 {
-#endif 
+#endif
 typedef void (*glXBindTexImageEXTProc) (Display*, GLXDrawable, int, const int*);
 typedef void (*glXReleaseTexImageEXTProc) (Display*, GLXDrawable, int);
 typedef struct renderer_t renderer_t;
@@ -36,6 +36,9 @@ typedef struct riftwin_t
   int               focused;
   char             *name;
   vec3              pos;
+  vec3              rot;
+  float             r_width;
+  float             r_height;
 
   struct riftwin_t *next;
 } riftwin_t;
@@ -97,6 +100,6 @@ void riftwin_update(riftwm_t *, riftwin_t *);
 
 #ifdef __cplusplus
 }
-#endif 
+#endif
 
 #endif

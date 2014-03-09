@@ -151,6 +151,10 @@ renderer_init(riftwm_t *wm)
   r->rot_x = 0.0f;
   r->rot_y = 0.0f;
 
+  r->origin[0] = 0.0f;
+  r->origin[1] = 0.0f;
+  r->origin[2] = 3.0f;
+
   r->dir[0] =  0.0f;
   r->dir[1] =  0.0f;
   r->dir[2] =  1.0f;
@@ -189,8 +193,6 @@ render_scene(renderer_t *r)
       float width = win->height * height / win->width;
 
       glPushMatrix();
-      glRotatef((M_PI - r->rot_y)  * 180.0f / M_PI, 0.0f, 1.0f, 0.0f);
-
       glBindTexture(GL_TEXTURE_2D, win->texture);
       glGenerateMipmap(GL_TEXTURE_2D);
       glBegin(GL_QUADS);
@@ -213,14 +215,14 @@ render_scene(renderer_t *r)
   glPushMatrix();
   glTranslatef(-r->leftHand[0], -r->leftHand[1], -r->leftHand[2]);
   glDisable(GL_TEXTURE_2D);
-  gluSphere(q, 0.5f, 16, 16);
+  gluSphere(q, 0.1f, 16, 16);
   glEnable(GL_TEXTURE_2D);
   glPopMatrix();
 
   glPushMatrix();
   glTranslatef(-r->rightHand[0], -r->rightHand[1], -r->rightHand[2]);
   glDisable(GL_TEXTURE_2D);
-  gluSphere(q, 0.5f, 16, 16);
+  gluSphere(q, 0.1f, 16, 16);
   glEnable(GL_TEXTURE_2D);
   glPopMatrix();
 
