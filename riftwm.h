@@ -99,6 +99,7 @@ void riftwm_restart(riftwm_t *);
 void riftwm_error(riftwm_t *, const char *, ...);
 void riftwin_update(riftwm_t *, riftwin_t *);
 void focus_window(riftwm_t *wm, riftwin_t *win);
+void defocus_window(riftwm_t *wm, riftwin_t *win);
 
 #ifdef __cplusplus
 }

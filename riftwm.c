@@ -228,8 +228,6 @@ focus_window(riftwm_t *wm, riftwin_t *win)
 {
   XFocusChangeEvent fe;
 
-  XSetInputFocus(wm->dpy, win->window, RevertToPointerRoot, CurrentTime);
-
   fe.type = FocusIn;
   fe.send_event = True;
   fe.display = wm->dpy;
@@ -237,6 +235,20 @@ focus_window(riftwm_t *wm, riftwin_t *win)
   fe.mode = NotifyNormal;
   fe.detail = NotifyPointer;
 
+  XSendEvent(wm->dpy, win->window, False, FocusChangeMask, (XEvent*)&fe);
+}
+
+void
+defocus_window(riftwm_t *wm, riftwin_t *win)
+{
+  XFocusChangeEvent fe;
+
+  fe.type = FocusOut;
+  fe.send_event = True;
+  fe.display = wm->dpy;
+  fe.window = win->window;
+  fe.mode = NotifyNormal;
+  fe.detail = NotifyPointer;
   XSendEvent(wm->dpy, win->window, False, FocusChangeMask, (XEvent*)&fe);
 }
 

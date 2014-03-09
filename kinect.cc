@@ -190,6 +190,13 @@ kinect_update(kinect_t *k)
           riftwin_t *foc = NULL;
           float max_cos = -2.0f;
 
+          win = k->wm->windows;
+          while (win)
+          {
+            win->moving = 0;
+            win = win->next;
+          }
+
           int handsUp = signal(left_hand_point, left_elbow_point);
           if (k->focused) {
             k->focused->moving = 0;
@@ -201,6 +208,15 @@ kinect_update(kinect_t *k)
             }
           }
 
+          win = k->wm->windows;
+          while (win)
+          {
+            win->focused = 0;
+            defocus_window(k->wm, win);
+            win = win->next;
+          }
+
+          win = k->wm->windows;
           while (win)
           {
             if (win->mapped)
@@ -229,8 +245,10 @@ kinect_update(kinect_t *k)
               {
                 max_cos = cos_th;
                 max = win;
+                break;
               }
             }
+
             win = win->next;
           }
 
@@ -241,14 +259,13 @@ kinect_update(kinect_t *k)
               printf("focused window\n");
               max->focused = 1;
               k->focused = max;
-              //focus_window(k->wm, max);
+              focus_window(k->wm, max);
             }
           } else if (handsUp == 0) {
             // No window is focused, unfocus old window
             if (foc) foc->focused = 0;
             k->focused = NULL;
           }
-
         }
       }
 
