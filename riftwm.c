@@ -104,6 +104,8 @@ find_window(riftwm_t *wm, Window window)
   return NULL;
 }
 
+static float x = -1.0f;
+
 static riftwin_t *
 add_window(riftwm_t *wm, Window window)
 {
@@ -118,8 +120,8 @@ add_window(riftwm_t *wm, Window window)
     win->next = wm->windows;
     win->dirty = 1;
     win->mapped = 0;
-    //win->focused = 1; // Don't focus for now - we use arm pointing focus
-    win->pos[0] = 0.0f;
+    // win->focused = 1; // Don't focus for now - we use arm pointing focus
+    win->pos[0] = x += 2.0f;
     win->pos[1] = 0.0f;
     win->pos[2] = 0.0f;
 
